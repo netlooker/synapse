@@ -49,6 +49,7 @@ Synapse has moved from an earlier vault-specific prototype to a generic markdown
 - a Librarian agent, `Cipher`, acting as the gatekeeper for markdown and vector memory
 
 External-agent setup guidance lives at [docs/openclaw-integration.md](docs/openclaw-integration.md).
+Agent onboarding guidance lives at [docs/agent-introduction.md](docs/agent-introduction.md).
 MCP runtime requirements live at [docs/mcp-requirements.md](docs/mcp-requirements.md).
 A tracked MCP client example lives at [config/synapse.mcp.example.json](config/synapse.mcp.example.json).
 HTTP/OpenAPI guidance for app integration lives at [docs/http-api.md](docs/http-api.md).

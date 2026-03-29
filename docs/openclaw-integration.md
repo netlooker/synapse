@@ -4,6 +4,8 @@
 
 This document is the practical integration guide for external agents such as OpenClaw.
 
+For the shortest complete project briefing before using this guide, start with [docs/agent-introduction.md](agent-introduction.md).
+
 Use it when an agent needs to:
 
 - install Synapse
