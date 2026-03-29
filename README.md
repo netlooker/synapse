@@ -2,6 +2,8 @@
 
 > Semantic shadow infrastructure for markdown vaults.
 
+Synapse indexes a folder of markdown notes, stores semantic embeddings, and lets you search and discover related ideas.
+
 Synapse is a vault-native retrieval engine for people who keep their memory in markdown.
 
 Point it at any markdown folder, let it slice documents into meaningful sections, embed them, index them, and surface connections that normal search will never catch. The goal is not just "RAG over files." The goal is a high-signal memory system that can trace hidden lines between scattered fragments of thought.
@@ -56,6 +58,20 @@ MCP runtime requirements live at [docs/mcp-requirements.md](docs/mcp-requirement
 A tracked MCP client example lives at [config/synapse.mcp.example.json](config/synapse.mcp.example.json).
 HTTP/OpenAPI guidance for app integration lives at [docs/http-api.md](docs/http-api.md).
 The tracked OpenAPI contract lives at [docs/openapi.json](docs/openapi.json).
+
+## Simplest Working Setup
+
+If you just want Synapse working with the least setup friction:
+
+1. install Synapse with `uv sync`
+2. copy [config/synapse.example.toml](config/synapse.example.toml) to `config/synapse.toml`
+3. point `[vault].root` at your markdown folder
+4. point `[database].path` at a writable SQLite file
+5. run Ollama locally on `http://127.0.0.1:11434`
+6. switch the default embedding provider in `config/synapse.toml` to the Ollama fallback provider if needed
+7. follow [docs/quick-start.md](docs/quick-start.md) for the first index and search commands
+
+That is the easiest way to try Synapse before moving to the stronger Infinity + Perplexity `4B` setup.
 
 ## Why Perplexity Embeddings Matter
 
