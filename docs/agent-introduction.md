@@ -282,6 +282,7 @@ MCP mirrors the same semantics through structured error payloads.
 ## Related Docs
 
 - [README.md](../README.md)
+- [docs/architecture.md](architecture.md)
 - [docs/openclaw-integration.md](openclaw-integration.md)
 - [docs/http-api.md](http-api.md)
 - [docs/mcp-requirements.md](mcp-requirements.md)

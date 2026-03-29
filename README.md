@@ -50,6 +50,8 @@ Synapse has moved from an earlier vault-specific prototype to a generic markdown
 
 External-agent setup guidance lives at [docs/openclaw-integration.md](docs/openclaw-integration.md).
 Agent onboarding guidance lives at [docs/agent-introduction.md](docs/agent-introduction.md).
+Regular user setup lives at [docs/quick-start.md](docs/quick-start.md).
+Architecture and system boundaries live at [docs/architecture.md](docs/architecture.md).
 MCP runtime requirements live at [docs/mcp-requirements.md](docs/mcp-requirements.md).
 A tracked MCP client example lives at [config/synapse.mcp.example.json](config/synapse.mcp.example.json).
 HTTP/OpenAPI guidance for app integration lives at [docs/http-api.md](docs/http-api.md).
@@ -88,10 +90,10 @@ Current codebase includes:
 - sqlite-vec storage behind a `VectorStore` seam
 - note-level and contextual chunk-level embeddings
 - semantic search with `note`, `chunk`, and `hybrid` modes
-- metadata-aware reranking using tags, frontmatter, titles, paths, and wikilinks
-- discovery scoring that combines semantic, metadata, and graph signals
+- metadata-aware reranking and discovery scoring
 - validation and gardening utilities
-- a typed `CipherService` facade with lazy agent initialization
+- aligned MCP and HTTP/OpenAPI interfaces
+- a typed `CipherService` facade
 
 Recently verified live:
 
@@ -99,49 +101,7 @@ Recently verified live:
 - Infinity-served `perplexity-ai/pplx-embed-context-v1-4b`
 - end-to-end indexing, hybrid search, and discovery against the generic fixture vault
 
-## Architecture
-
-Synapse is being split into two layers.
-
-### 1. Retrieval Engine
-
-Deterministic Python services for:
-
-- scanning markdown folders
-- parsing metadata
-- chunking notes
-- embedding chunks and notes
-- storing vectors and metadata
-- semantic search and discovery
-
-### 2. Librarian Layer
-
-An agent shell over those services.
-
-`Cipher` should reason about:
-
-- which discoveries matter
-- which links are likely missing
-- what should be repaired or reindexed
-- where the archive is drifting out of shape
-
-But the actual file operations and index mutations stay in normal application code so the system remains testable and safe.
-
-## Transport Interfaces
-
-Synapse now has two external integration paths:
-
-- MCP for agents and tool-using runtimes
-- HTTP/OpenAPI for PWAs, dashboards, and other web clients
-
-Both transports wrap the same Synapse service layer so indexing, search, discovery, validation, and `Cipher` do not drift across interfaces.
-
-The interfaces are intentionally aligned:
-
-- core retrieval exists over both MCP and HTTP
-- `Cipher` audit/explain/chunking/stub-review exists over both MCP and HTTP
-- reasoning-model configuration is only required for the `Cipher` operations
-- model-backed `Cipher` operations use configurable timeouts and return structured timeout/dependency errors
+For the technical map of the system, see [docs/architecture.md](docs/architecture.md).
 
 ## Configuration
 
@@ -226,6 +186,8 @@ For the web API:
 ```bash
 .venv/bin/pip install -e ".[api]"
 ```
+
+For a step-by-step local setup, see [docs/quick-start.md](docs/quick-start.md).
 
 ## Public Status
 
@@ -330,24 +292,6 @@ uv run synapse-garden --config config/synapse.toml --db ~/notes/.synapse.sqlite 
 ## License
 
 Synapse is released under the [MIT License](LICENSE).
-
-## Design Principles
-
-- Markdown first
-- Retrieval before generation
-- Deterministic mechanics under agentic reasoning
-- Configurable providers
-- High signal over maximal recall
-- Local-first when possible, provider-flexible when useful
-- Generic markdown folder support first, product-specific conventions second
-
-## Near-Term Roadmap
-
-- tune discovery weights on larger real-world corpora
-- add vector index audit operations to `Cipher`
-- add LanceDB as a second vector backend
-- benchmark `4B` vs `0.6B` profiles on larger vaults
-- tighten chunk identity and multi-run reindex behavior
 
 ## In One Sentence
 
