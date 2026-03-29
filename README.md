@@ -69,7 +69,8 @@ If you just want Synapse working with the least setup friction:
 4. point `[database].path` at a writable SQLite file
 5. run Ollama locally on `http://127.0.0.1:11434`
 6. switch the default embedding provider in `config/synapse.toml` to the Ollama fallback provider if needed
-7. follow [docs/quick-start.md](docs/quick-start.md) for the first index and search commands
+7. run `uv run synapse-smoke --config config/synapse.toml`
+8. follow [docs/quick-start.md](docs/quick-start.md) for the first index and search commands
 
 That is the easiest way to try Synapse before moving to the stronger Infinity + Perplexity `4B` setup.
 
@@ -134,6 +135,7 @@ Current default profile:
 - contextual chunk embeddings: `perplexity-ai/pplx-embed-context-v1-4b`
 - fallback embeddings: `nomic-embed-text:v1.5`
 - `Cipher` timeout defaults configured in `[cipher]`
+- note and contextual provider dimensions must match for hybrid retrieval; the default profile keeps both at `2560`
 
 Example:
 
@@ -222,6 +224,13 @@ Current limitations:
 - `Cipher` is solid for audit and explanation, but vector-index audit and repair policy are still incomplete
 - native nested Perplexity contextual API flow is not yet the common production path
 
+Current operational details:
+
+- service-backed discovery defaults to `0.20`, while the standalone CLI currently defaults to `0.65`; set the threshold explicitly when you need repeatable behavior across surfaces
+- reindexing is path-based: unchanged files are skipped by content hash, and changed files replace the stored chunks for that document
+- reusing one SQLite DB across different vault roots can leave stale documents behind, because indexing updates by stored path and does not currently prune documents that disappeared under an older root
+- `Cipher` audit is deterministic, while explanation, chunking advice, and stub review are model-backed
+
 ## Development
 
 Run focused tests:
@@ -250,6 +259,14 @@ uv run pytest -q \
 ```
 
 ## CLI
+
+### Dry-run Synapse
+
+```bash
+uv run synapse-smoke --config config/synapse.toml
+```
+
+This command uses the bundled fixture vault and a fresh temporary DB by default so agents can verify provider wiring and retrieval behavior without touching a real vault.
 
 ### Index a markdown folder
 

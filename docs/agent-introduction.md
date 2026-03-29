@@ -174,6 +174,7 @@ Override order:
 
 CLI:
 
+- `synapse-smoke`
 - `synapse-index`
 - `synapse-search`
 - `synapse-discover`
@@ -196,12 +197,39 @@ For an agent coming into the project cold, use this order:
 2. Read [README.md](../README.md).
 3. Read [docs/openclaw-integration.md](openclaw-integration.md).
 4. Copy the example config and set the vault root, DB path, and embedding endpoints.
-5. Run indexing on a markdown folder.
-6. Run search and discovery.
-7. Use `Cipher` only when reasoning or maintenance review is needed.
-8. Use MCP if the agent runtime is tool-based; use HTTP if integrating with a web app or PWA.
+5. Run `synapse-smoke` first to verify providers, indexing, retrieval, and dry-run maintenance against the bundled fixture vault.
+6. Run indexing on a markdown folder.
+7. Run search and discovery.
+8. Use `Cipher` only when reasoning or maintenance review is needed.
+9. Use MCP if the agent runtime is tool-based; use HTTP if integrating with a web app or PWA.
+
+## Smoke Test
+
+Before touching a real vault, run the bundled dry-run command:
+
+```bash
+uv run synapse-smoke --config config/synapse.toml
+```
+
+What it does:
+
+- uses the bundled fixture vault by default
+- creates a fresh temporary SQLite DB by default
+- runs health, index, search, discovery, validation, and gardener dry-run
+- optionally runs one model-backed `Cipher` explanation step when the reasoning env is configured
+
+Important behavior:
+
+- the smoke command refuses to reuse an existing DB path unless `--reuse-db` is passed
+- this avoids stale documents when a DB has been reused across different vault roots
 
 ## Minimal Commands
+
+Smoke:
+
+```bash
+uv run synapse-smoke --config config/synapse.toml
+```
 
 Index:
 

@@ -143,6 +143,7 @@ What is already solid:
 - semantic search with `note`, `chunk`, and `hybrid` modes
 - metadata-aware reranking
 - discovery scoring that combines semantic, metadata, and graph signals
+- a current discovery formula of `0.75 * semantic + metadata + graph`, with metadata and graph contributions capped
 - MCP and HTTP/OpenAPI aligned over the same service layer
 - typed `CipherService` facade
 

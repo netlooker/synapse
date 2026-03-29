@@ -43,7 +43,9 @@ If OpenClaw wants to register Synapse as an MCP server instead of shelling out t
 
 If a web UI needs to invoke the same functionality over HTTP, use the OpenAPI interface documented in [docs/http-api.md](http-api.md).
 
-For `Cipher` operations over MCP or HTTP, configure a reasoning model separately from the embedding providers. Typical local setup:
+For model-backed `Cipher` operations over MCP or HTTP, configure a reasoning model separately from the embedding providers. That applies to explanation, chunking-strategy, and stub-review calls. `audit` is deterministic and can run without the reasoning backend.
+
+Typical local setup for the model-backed calls:
 
 - `OPENAI_BASE_URL=http://127.0.0.1:11434/v1`
 - `OPENAI_API_KEY=ollama`
@@ -138,6 +140,11 @@ Important sections:
 - `[providers.embeddings.*]`
   - runtime endpoints and models
 
+Important constraint:
+
+- for hybrid retrieval, note and contextual providers must use matching dimensions
+- the default `4B` profile keeps both note and contextual embeddings at `2560`
+
 Current known-good provider examples:
 
 - Infinity:
@@ -159,10 +166,11 @@ If OpenClaw just needs Synapse working quickly, use this order:
 
 1. copy `config/synapse.example.toml` to `config/synapse.toml`
 2. set the markdown root and DB path
-3. register the MCP server with [config/synapse.mcp.example.json](../config/synapse.mcp.example.json) or use the CLI directly
-4. run indexing
-5. run search or discovery
-6. call `Cipher` only when reasoning or maintenance review is needed
+3. run `uv run synapse-smoke --config config/synapse.toml` to verify provider wiring against the bundled fixture vault
+4. register the MCP server with [config/synapse.mcp.example.json](../config/synapse.mcp.example.json) or use the CLI directly
+5. run indexing
+6. run search or discovery
+7. call `Cipher` only when reasoning or maintenance review is needed
 
 ## MCP Server Configuration
 
@@ -215,6 +223,19 @@ Tracked contract:
 
 ## CLI Workflow
 
+### 0. Dry-run Synapse first
+
+```bash
+uv run synapse-smoke --config config/synapse.toml
+```
+
+What this does:
+
+- uses the bundled fixture vault instead of the target vault
+- creates a fresh temporary DB by default
+- runs health, indexing, search, discovery, validation, and gardener dry-run
+- optionally runs one model-backed `Cipher` explanation step when the reasoning env is configured
+
 ### 1. Index a markdown folder
 
 ```bash
@@ -264,6 +285,14 @@ Discovery scoring currently combines:
 - semantic similarity
 - metadata overlap
 - graph overlap from wikilinks
+
+Current scoring details:
+
+- composite score = `min(1.0, 0.75 * semantic_similarity + metadata_score + graph_score)`
+- metadata score is capped at `0.18` from tag overlap, frontmatter overlap, and title-token overlap
+- graph score is capped at `0.16` from shared wikilink neighbors and direct title-bridge signals
+- service-backed discovery defaults to `0.20`, while the standalone CLI currently defaults to `0.65`
+- agents should set `threshold` explicitly instead of relying on a surface-specific default
 
 ### 4. Validate and garden
 
@@ -318,6 +347,15 @@ indexer = Indexer(
 stats = indexer.index_all()
 print(stats)
 ```
+
+Reindex behavior today:
+
+- files are tracked by relative path within the configured markdown root
+- unchanged files are skipped by content hash
+- changed files update the document record, delete the previous stored chunks for that path, and insert fresh note and chunk rows
+- reusing the same SQLite DB across different markdown roots can leave stale documents from the old root behind, because missing old paths are not pruned automatically
+- chunk identity across repeated reindex runs is replacement-based today; finer-grained repair policy is still a future improvement
+- for clean end-to-end runs, prefer a fresh DB per vault root or explicitly remove stale documents before reusing a shared DB
 
 ### Search
 
@@ -441,11 +479,12 @@ Use this loop:
 
 1. ensure Synapse is installed
 2. ensure `config/synapse.toml` points at the target markdown folder and DB
-3. run indexing if the DB is missing or stale
-4. run search for user-facing retrieval tasks
-5. run discovery for maintenance or knowledge-graph improvement tasks
-6. send structured findings to `Cipher` for explanation or audit
-7. perform file changes only through explicit deterministic actions
+3. run `synapse-smoke` before touching the target vault
+4. run indexing if the DB is missing or stale
+5. run search for user-facing retrieval tasks
+6. run discovery for maintenance or knowledge-graph improvement tasks
+7. send structured findings to `Cipher` for explanation or audit
+8. perform file changes only through explicit deterministic actions
 
 ## Environment Variables
 
@@ -469,9 +508,13 @@ For `Cipher`, the reasoning model currently follows the OpenAI-compatible enviro
 - Synapse is generic markdown-first. Do not assume Obsidian-only behavior.
 - `sqlite-vec` is the current supported vector backend.
 - `LanceDB` is planned, not live.
-- Infinity contextual behavior currently uses batch embeddings over `/embeddings`, not Perplexity's nested contextual endpoint.
+- Infinity contextual behavior currently uses batch embeddings over `/embeddings`, not Perplexity's nested contextual endpoint. Native contextual requests exist for `openai_compatible` providers, but that is not the default Synapse profile.
 - Discovery thresholds are still being tuned across corpora. Treat them as heuristics, not hard guarantees.
+- `Cipher` audit is deterministic. Explanation, chunking strategy, and stub review are model-backed.
+- Synapse can run fully local when the configured providers point at local Infinity or Ollama endpoints, but provider endpoints may also be remote.
+- `config/synapse.toml` is intended to stay local and is gitignored.
 - `Cipher` is safe to use for audit and explanation now, but vector-index audit and repair policy are still incomplete.
+- `synapse-smoke` uses a fresh DB by default and refuses to reuse an existing DB path unless explicitly told to do so.
 
 ## Minimal Agent Checklist
 
@@ -479,6 +522,7 @@ For `Cipher`, the reasoning model currently follows the OpenAI-compatible enviro
 - create `config/synapse.toml`
 - set markdown root and SQLite DB path
 - configure at least one embedding provider
+- run `synapse-smoke`
 - run `synapse-index`
 - run `synapse-search` or `synapse-discover`
 - call `CipherService` only after deterministic retrieval has produced evidence

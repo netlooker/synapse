@@ -37,7 +37,7 @@ Current strengths:
 
 Current gaps:
 
-- repair actions are still conservative
+- repair mode is still advisory and does not mutate files or repair vector state automatically
 - vector index audit is not yet complete
 - external-agent coverage is still growing
 
@@ -45,17 +45,21 @@ Current gaps:
 
 External agents should interact with `Cipher` through task-oriented operations, not ad hoc prompts.
 
-Recommended operations:
+Currently implemented operations:
 
 - `audit_vault`
 - `suggest_chunking_strategy`
 - `explain_connection`
+- `review_stub_candidates`
+
+Planned operations:
+
 - `review_discoveries`
 - `plan_repairs`
 - `repair_links`
 - `audit_vector_index`
 
-## Draft Capability Contract
+## Current Capability Contract
 
 ### 1. Audit Vault
 
@@ -69,6 +73,13 @@ Input:
   "mode": "audit"
 }
 ```
+
+Current behavior:
+
+- scans markdown files for broken wikilinks
+- suggests `repair_links` when broken links exist
+- suggests `reindex_documents` when the configured DB path does not exist
+- does not currently perform repair actions, even when `mode` is `"repair"`
 
 Output:
 
@@ -138,7 +149,48 @@ Output:
 }
 ```
 
-### 4. Review Discoveries
+### 4. Review Stub Candidates
+
+Input:
+
+```json
+{
+  "op": "review_stub_candidates",
+  "stub_dir": "entities",
+  "candidates": [
+    {
+      "target_link": "Semantic Memory",
+      "source_paths": [
+        "notes/a.md"
+      ],
+      "suggested_path": "entities/Semantic Memory.md"
+    }
+  ]
+}
+```
+
+Output:
+
+```json
+{
+  "status": "ok",
+  "reviews": [
+    {
+      "target_link": "Semantic Memory",
+      "action": "create_stub",
+      "confidence": 0.86,
+      "rationale": "This is a reusable concept note.",
+      "suggested_path": "entities/Semantic Memory.md"
+    }
+  ]
+}
+```
+
+## Planned Capability Contract
+
+The following operations are part of the intended direction, but are not implemented in the current `CipherService` contract yet.
+
+### 5. Review Discoveries
 
 Input:
 
@@ -177,7 +229,7 @@ Output:
 }
 ```
 
-### 5. Plan Repairs
+### 6. Plan Repairs
 
 Input:
 
@@ -228,6 +280,12 @@ Where:
 - `Cipher` reasons over those facts
 - all write actions remain explicit and auditable
 
+Model requirements today:
+
+- `audit_vault` is deterministic and does not need a reasoning model
+- `explain_connection`, `suggest_chunking_strategy`, and `review_stub_candidates` are model-backed
+- model-backed requests accept per-request `timeout_seconds` overrides over the defaults in `[cipher]`
+
 ## For OpenClaw
 
 OpenClaw-style usage should look like:
@@ -250,7 +308,7 @@ External agents should now treat `Cipher` as:
 
 - service-backed
 - typed
-- suitable for audit, explanation, and chunking advice today
+- suitable for audit, explanation, chunking advice, and stub review today
 
 Still to improve:
 

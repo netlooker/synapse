@@ -93,6 +93,7 @@ Practical rule:
 Current routes:
 
 - `GET /health`
+- `GET /cipher/health`
 - `POST /index`
 - `POST /search`
 - `POST /discover`
@@ -102,13 +103,21 @@ Current routes:
 - `POST /cipher/chunking-strategy`
 - `POST /cipher/review-stubs`
 
-`Cipher` routes require a reasoning model environment. Typical local setup:
+Model-backed `Cipher` routes require a reasoning model environment:
+
+- `POST /cipher/explain`
+- `POST /cipher/chunking-strategy`
+- `POST /cipher/review-stubs`
+
+`POST /cipher/audit` is deterministic and does not require a reasoning backend.
+
+Typical local setup for the model-backed routes:
 
 - `OPENAI_BASE_URL=http://127.0.0.1:11434/v1`
 - `OPENAI_API_KEY=ollama`
 - `SYNAPSE_MODEL=openai:glm-4.7-flash:latest`
 
-`Cipher` timeout defaults come from `[cipher]` in `config/synapse.toml`, and model-backed routes also accept per-request `timeout_seconds` overrides.
+`Cipher` timeout defaults come from `[cipher]` in `config/synapse.toml`, and the model-backed routes above accept per-request `timeout_seconds` overrides that take precedence over those defaults.
 
 ## Response Codes
 

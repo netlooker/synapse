@@ -29,6 +29,10 @@ validate:
 garden:
     .venv/bin/python -m synapse.gardener
 
+# Run agent-facing smoke test
+smoke:
+    .venv/bin/python -m synapse.smoke
+
 # Export the tracked OpenAPI document
 openapi:
     .venv/bin/python -m synapse.export_openapi
