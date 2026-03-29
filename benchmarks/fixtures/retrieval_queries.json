@@ -1,0 +1,32 @@
+[
+  {
+    "id": "hidden-links",
+    "query": "find hidden links across scattered markdown notes",
+    "relevant": ["weak-signals.md", "agency-memory.md", "contextual-retrieval.md"]
+  },
+  {
+    "id": "librarian-repairs",
+    "query": "agent that audits a markdown vault and repairs vector drift",
+    "relevant": ["cybernetic-librarian.md", "vector-maintenance.md"]
+  },
+  {
+    "id": "contextual-chunks",
+    "query": "document chunks with surrounding context for better retrieval",
+    "relevant": ["contextual-retrieval.md", "agency-memory.md"]
+  },
+  {
+    "id": "backend-choice",
+    "query": "compare sqlite and lancedb for vector search",
+    "relevant": ["database-operators.md"]
+  },
+  {
+    "id": "weak-signals",
+    "query": "faint indicators across separate reports",
+    "relevant": ["field-intelligence.md", "weak-signals.md"]
+  },
+  {
+    "id": "embedding-drift",
+    "query": "keeping embeddings fresh after notes change",
+    "relevant": ["vector-maintenance.md", "cybernetic-librarian.md"]
+  }
+]

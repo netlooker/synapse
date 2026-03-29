@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "synapse": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/ABSOLUTE/PATH/TO/synapse",
+        "synapse-mcp"
+      ],
+      "env": {
+        "SYNAPSE_CONFIG": "/ABSOLUTE/PATH/TO/synapse/config/synapse.toml",
+        "SYNAPSE_MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}

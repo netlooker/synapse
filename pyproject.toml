@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synapse"
+version = "0.1.0"
+description = "Semantic retrieval and discovery engine for markdown knowledge bases"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anyio>=4.12.1",
+    "numpy>=2.0.0",
+    "ollama>=0.6.1",
+    "pydantic-ai>=1.56.0",
+    "sqlite-vec>=0.1.7a10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+]
+api = [
+    "fastapi>=0.116,<1.0",
+    "uvicorn>=0.35,<1.0",
+]
+mcp = [
+    "mcp[cli]>=1.26,<2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+include = ["synapse", "synapse.*"]
+
+[project.scripts]
+synapse-index = "synapse.index:main"
+synapse-search = "synapse.search:main"
+synapse-discover = "synapse.discovery:main"
+synapse-validate = "synapse.validate:main"
+synapse-garden = "synapse.gardener:main"
+synapse-mcp = "synapse.mcp_server:main"
+synapse-api = "synapse.web_api:main"
+synapse-export-openapi = "synapse.export_openapi:main"

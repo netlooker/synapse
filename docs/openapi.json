@@ -1,0 +1,1870 @@
+{
+  "components": {
+    "schemas": {
+      "AuditVaultResponse": {
+        "properties": {
+          "broken_links": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Broken Links",
+            "type": "array"
+          },
+          "stale_documents": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stale Documents",
+            "type": "array"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          },
+          "suggested_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggested Actions",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "title": "AuditVaultResponse",
+        "type": "object"
+      },
+      "BrokenLinkResult": {
+        "properties": {
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          },
+          "target_link": {
+            "title": "Target Link",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_path",
+          "target_link"
+        ],
+        "title": "BrokenLinkResult",
+        "type": "object"
+      },
+      "CipherAuditApiRequest": {
+        "properties": {
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "deps": {
+            "$ref": "#/components/schemas/CipherDepsModel"
+          },
+          "mode": {
+            "default": "audit",
+            "enum": [
+              "audit",
+              "repair"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "op": {
+            "const": "audit_vault",
+            "default": "audit_vault",
+            "title": "Op",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deps"
+        ],
+        "title": "CipherAuditApiRequest",
+        "type": "object"
+      },
+      "CipherChunkingApiRequest": {
+        "properties": {
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "model_info": {
+            "title": "Model Info",
+            "type": "string"
+          },
+          "op": {
+            "const": "suggest_chunking_strategy",
+            "default": "suggest_chunking_strategy",
+            "title": "Op",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          }
+        },
+        "required": [
+          "model_info"
+        ],
+        "title": "CipherChunkingApiRequest",
+        "type": "object"
+      },
+      "CipherDepsModel": {
+        "properties": {
+          "cortex_path": {
+            "title": "Cortex Path",
+            "type": "string"
+          },
+          "synapse_db": {
+            "title": "Synapse Db",
+            "type": "string"
+          },
+          "wraith_root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wraith Root"
+          }
+        },
+        "required": [
+          "cortex_path",
+          "synapse_db"
+        ],
+        "title": "CipherDepsModel",
+        "type": "object"
+      },
+      "CipherExplainApiRequest": {
+        "properties": {
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "doc_a": {
+            "title": "Doc A",
+            "type": "string"
+          },
+          "doc_b": {
+            "title": "Doc B",
+            "type": "string"
+          },
+          "op": {
+            "const": "explain_connection",
+            "default": "explain_connection",
+            "title": "Op",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          }
+        },
+        "required": [
+          "doc_a",
+          "doc_b"
+        ],
+        "title": "CipherExplainApiRequest",
+        "type": "object"
+      },
+      "CipherStubReviewApiRequest": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/StubCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "op": {
+            "const": "review_stub_candidates",
+            "default": "review_stub_candidates",
+            "title": "Op",
+            "type": "string"
+          },
+          "stub_dir": {
+            "default": "entities",
+            "title": "Stub Dir",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          }
+        },
+        "title": "CipherStubReviewApiRequest",
+        "type": "object"
+      },
+      "DiscoverRequest": {
+        "properties": {
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "db_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Db Path"
+          },
+          "max_total": {
+            "default": 10,
+            "title": "Max Total",
+            "type": "integer"
+          },
+          "threshold": {
+            "default": 0.2,
+            "title": "Threshold",
+            "type": "number"
+          },
+          "top_k": {
+            "default": 3,
+            "title": "Top K",
+            "type": "integer"
+          }
+        },
+        "title": "DiscoverRequest",
+        "type": "object"
+      },
+      "DiscoverResponse": {
+        "properties": {
+          "database_path": {
+            "title": "Database Path",
+            "type": "string"
+          },
+          "discoveries": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryResult"
+            },
+            "title": "Discoveries",
+            "type": "array"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "database_path",
+          "threshold"
+        ],
+        "title": "DiscoverResponse",
+        "type": "object"
+      },
+      "DiscoveryResult": {
+        "properties": {
+          "graph_score": {
+            "title": "Graph Score",
+            "type": "number"
+          },
+          "metadata_score": {
+            "title": "Metadata Score",
+            "type": "number"
+          },
+          "semantic_similarity": {
+            "title": "Semantic Similarity",
+            "type": "number"
+          },
+          "similarity": {
+            "title": "Similarity",
+            "type": "number"
+          },
+          "source_path": {
+            "title": "Source Path",
+            "type": "string"
+          },
+          "source_title": {
+            "title": "Source Title",
+            "type": "string"
+          },
+          "target_path": {
+            "title": "Target Path",
+            "type": "string"
+          },
+          "target_title": {
+            "title": "Target Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_path",
+          "source_title",
+          "target_path",
+          "target_title",
+          "similarity",
+          "semantic_similarity",
+          "metadata_score",
+          "graph_score"
+        ],
+        "title": "DiscoveryResult",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "dependency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dependency"
+          },
+          "error_type": {
+            "title": "Error Type",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          }
+        },
+        "required": [
+          "error_type",
+          "message",
+          "retryable"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "ExplainConnectionResponse": {
+        "properties": {
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "explanation"
+        ],
+        "title": "ExplainConnectionResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "chunk_provider": {
+            "$ref": "#/components/schemas/ProviderSummary"
+          },
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "database_exists": {
+            "title": "Database Exists",
+            "type": "boolean"
+          },
+          "database_path": {
+            "title": "Database Path",
+            "type": "string"
+          },
+          "dimensions_match": {
+            "title": "Dimensions Match",
+            "type": "boolean"
+          },
+          "note_provider": {
+            "$ref": "#/components/schemas/ProviderSummary"
+          },
+          "ready_for_indexing": {
+            "title": "Ready For Indexing",
+            "type": "boolean"
+          },
+          "reasoning_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Model"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/RequirementSummary"
+          },
+          "sqlite_vec_python_package": {
+            "title": "Sqlite Vec Python Package",
+            "type": "boolean"
+          },
+          "vault_exists": {
+            "title": "Vault Exists",
+            "type": "boolean"
+          },
+          "vault_root": {
+            "title": "Vault Root",
+            "type": "string"
+          },
+          "vector_store": {
+            "title": "Vector Store",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vault_root",
+          "vault_exists",
+          "database_path",
+          "database_exists",
+          "vector_store",
+          "sqlite_vec_python_package",
+          "note_provider",
+          "chunk_provider",
+          "dimensions_match",
+          "requirements",
+          "ready_for_indexing"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "IndexRequest": {
+        "properties": {
+          "chunk_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Provider"
+          },
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "db_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Db Path"
+          },
+          "note_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Provider"
+          },
+          "vault_root": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vault Root"
+          }
+        },
+        "title": "IndexRequest",
+        "type": "object"
+      },
+      "IndexResponse": {
+        "properties": {
+          "chunk_provider": {
+            "title": "Chunk Provider",
+            "type": "string"
+          },
+          "database_path": {
+            "title": "Database Path",
+            "type": "string"
+          },
+          "note_provider": {
+            "title": "Note Provider",
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/IndexStats"
+          },
+          "vault_root": {
+            "title": "Vault Root",
+            "type": "string"
+          }
+        },
+        "required": [
+          "vault_root",
+          "database_path",
+          "note_provider",
+          "chunk_provider",
+          "stats"
+        ],
+        "title": "IndexResponse",
+        "type": "object"
+      },
+      "IndexStats": {
+        "properties": {
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "indexed": {
+            "title": "Indexed",
+            "type": "integer"
+          },
+          "total_chunks": {
+            "title": "Total Chunks",
+            "type": "integer"
+          },
+          "total_files": {
+            "title": "Total Files",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_files",
+          "indexed",
+          "unchanged",
+          "errors",
+          "total_chunks"
+        ],
+        "title": "IndexStats",
+        "type": "object"
+      },
+      "ProviderSummary": {
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "context_strategy": {
+            "title": "Context Strategy",
+            "type": "string"
+          },
+          "dimensions": {
+            "title": "Dimensions",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "model",
+          "base_url",
+          "dimensions",
+          "context_strategy"
+        ],
+        "title": "ProviderSummary",
+        "type": "object"
+      },
+      "RequirementSummary": {
+        "properties": {
+          "embedding_models_configured": {
+            "title": "Embedding Models Configured",
+            "type": "boolean"
+          },
+          "markdown_folder": {
+            "title": "Markdown Folder",
+            "type": "boolean"
+          },
+          "python_environment": {
+            "default": true,
+            "title": "Python Environment",
+            "type": "boolean"
+          },
+          "sqlite_vec": {
+            "title": "Sqlite Vec",
+            "type": "boolean"
+          },
+          "writable_database_parent": {
+            "title": "Writable Database Parent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sqlite_vec",
+          "markdown_folder",
+          "writable_database_parent",
+          "embedding_models_configured"
+        ],
+        "title": "RequirementSummary",
+        "type": "object"
+      },
+      "ReviewStubCandidatesResponse": {
+        "properties": {
+          "reviews": {
+            "items": {
+              "$ref": "#/components/schemas/StubCandidateReview"
+            },
+            "title": "Reviews",
+            "type": "array"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "ReviewStubCandidatesResponse",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "properties": {
+          "chunk_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Provider"
+          },
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "db_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Db Path"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "mode": {
+            "default": "hybrid",
+            "enum": [
+              "note",
+              "chunk",
+              "hybrid"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "note_provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Provider"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "properties": {
+          "database_path": {
+            "title": "Database Path",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "mode",
+          "database_path"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "SearchResult": {
+        "properties": {
+          "chunk_similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chunk Similarity"
+          },
+          "metadata_boost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Boost"
+          },
+          "note_similarity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Similarity"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "similarity": {
+            "title": "Similarity",
+            "type": "number"
+          },
+          "snippet": {
+            "title": "Snippet",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "similarity",
+          "snippet"
+        ],
+        "title": "SearchResult",
+        "type": "object"
+      },
+      "StubCandidate": {
+        "properties": {
+          "source_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "suggested_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Path"
+          },
+          "target_link": {
+            "title": "Target Link",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_link"
+        ],
+        "title": "StubCandidate",
+        "type": "object"
+      },
+      "StubCandidateReview": {
+        "properties": {
+          "action": {
+            "default": "create_stub",
+            "enum": [
+              "create_stub",
+              "skip"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "confidence": {
+            "default": 0.5,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "suggested_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Path"
+          },
+          "target_link": {
+            "title": "Target Link",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_link",
+          "rationale"
+        ],
+        "title": "StubCandidateReview",
+        "type": "object"
+      },
+      "SuggestChunkingStrategyResponse": {
+        "properties": {
+          "max_chunk_size": {
+            "title": "Max Chunk Size",
+            "type": "integer"
+          },
+          "min_chunk_size": {
+            "title": "Min Chunk Size",
+            "type": "integer"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "status": {
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "max_chunk_size",
+          "min_chunk_size",
+          "rationale"
+        ],
+        "title": "SuggestChunkingStrategyResponse",
+        "type": "object"
+      },
+      "ValidateRequest": {
+        "properties": {
+          "config_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Path"
+          },
+          "db_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Db Path"
+          }
+        },
+        "title": "ValidateRequest",
+        "type": "object"
+      },
+      "ValidateResponse": {
+        "properties": {
+          "broken_links": {
+            "items": {
+              "$ref": "#/components/schemas/BrokenLinkResult"
+            },
+            "title": "Broken Links",
+            "type": "array"
+          },
+          "database_path": {
+            "title": "Database Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_path"
+        ],
+        "title": "ValidateResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Expose Synapse indexing, search, discovery, validation, and Cipher operations over JSON/HTTP for PWAs and other web clients.",
+    "summary": "HTTP and OpenAPI interface for Synapse retrieval and Cipher reasoning.",
+    "title": "Synapse API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/cipher/audit": {
+      "post": {
+        "operationId": "post_cipher_audit_cipher_audit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CipherAuditApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVaultResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Cipher Audit",
+        "tags": [
+          "cipher"
+        ]
+      }
+    },
+    "/cipher/chunking-strategy": {
+      "post": {
+        "operationId": "post_cipher_chunking_strategy_cipher_chunking_strategy_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CipherChunkingApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestChunkingStrategyResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed Dependency"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Post Cipher Chunking Strategy",
+        "tags": [
+          "cipher"
+        ]
+      }
+    },
+    "/cipher/explain": {
+      "post": {
+        "operationId": "post_cipher_explain_cipher_explain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CipherExplainApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplainConnectionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed Dependency"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Post Cipher Explain",
+        "tags": [
+          "cipher"
+        ]
+      }
+    },
+    "/cipher/health": {
+      "get": {
+        "operationId": "get_cipher_health_cipher_health_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "config_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Config Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Cipher Health",
+        "tags": [
+          "cipher"
+        ]
+      }
+    },
+    "/cipher/review-stubs": {
+      "post": {
+        "operationId": "post_cipher_review_stubs_cipher_review_stubs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CipherStubReviewApiRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewStubCandidatesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed Dependency"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway Timeout"
+          }
+        },
+        "summary": "Post Cipher Review Stubs",
+        "tags": [
+          "cipher"
+        ]
+      }
+    },
+    "/discover": {
+      "post": {
+        "operationId": "post_discover_discover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed Dependency"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Discover",
+        "tags": [
+          "synapse"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "get_health_health_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "config_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Config Path"
+            }
+          },
+          {
+            "in": "query",
+            "name": "vault_root",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vault Root"
+            }
+          },
+          {
+            "in": "query",
+            "name": "db_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Path"
+            }
+          },
+          {
+            "in": "query",
+            "name": "note_provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Note Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "chunk_provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Chunk Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Health",
+        "tags": [
+          "synapse"
+        ]
+      }
+    },
+    "/index": {
+      "post": {
+        "operationId": "post_index_index_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed Dependency"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Index",
+        "tags": [
+          "synapse"
+        ]
+      }
+    },
+    "/search": {
+      "post": {
+        "operationId": "post_search_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "424": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Failed Dependency"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Post Search",
+        "tags": [
+          "synapse"
+        ]
+      }
+    },
+    "/validate": {
+      "post": {
+        "operationId": "post_validate_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Validate",
+        "tags": [
+          "synapse"
+        ]
+      }
+    }
+  }
+}
