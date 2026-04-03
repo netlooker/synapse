@@ -194,6 +194,7 @@ Recommended pattern:
 - use the `synapse-mcp` console script
 - point `SYNAPSE_CONFIG` at the local `config/synapse.toml`
 - keep transport on `stdio`
+- `SYNAPSE_CONFIG` is required for `synapse-mcp` startup; do not rely on cwd-relative fallback
 
 Generic `mcpServers` example:
 

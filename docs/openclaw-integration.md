@@ -201,7 +201,7 @@ Recommended launch pattern:
 Why this shape:
 
 - `synapse-mcp` is the stable entrypoint
-- `SYNAPSE_CONFIG` sets the default Synapse runtime config
+- `SYNAPSE_CONFIG` sets the default Synapse runtime config and is required at MCP server startup
 - tools can still override `vault_root` and `db_path` per call when needed
 
 ## HTTP API Configuration

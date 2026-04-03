@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -224,10 +225,16 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
 
 
 def main() -> None:
-    import os
-
+    _require_server_config()
     transport = os.environ.get("SYNAPSE_MCP_TRANSPORT", "stdio")
     build_server().run(transport=transport)
+
+
+def _require_server_config() -> None:
+    config_path = os.environ.get("SYNAPSE_CONFIG")
+    if not config_path:
+        raise RuntimeError("SYNAPSE_CONFIG is required when starting synapse-mcp.")
+    load_settings(config_path)
 
 
 def _cipher_deps(

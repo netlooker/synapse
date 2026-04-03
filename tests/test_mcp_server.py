@@ -11,7 +11,7 @@ from pydantic_ai.models.test import TestModel
 
 from synapse.cipher_service import CipherService
 from synapse.errors import SynapseTimeoutError
-from synapse.mcp_server import build_server, resolve_runtime, runtime_requirements
+from synapse.mcp_server import build_server, resolve_runtime, runtime_requirements, _require_server_config
 
 
 def test_resolve_runtime_honors_overrides(tmp_path):
@@ -70,10 +70,22 @@ def test_example_mcp_config_is_valid_json():
     assert payload["mcpServers"]["synapse"]["env"]["SYNAPSE_MCP_TRANSPORT"] == "stdio"
 
 
+def test_mcp_entrypoint_requires_synapse_config(monkeypatch):
+    monkeypatch.delenv("SYNAPSE_CONFIG", raising=False)
+
+    with pytest.raises(RuntimeError, match="SYNAPSE_CONFIG is required"):
+        _require_server_config()
+
+
 def test_module_entrypoint_supports_mcp_handshake(tmp_path):
     vault = tmp_path / "vault"
     vault.mkdir()
     db = tmp_path / "synapse.sqlite"
+    config = tmp_path / "synapse.toml"
+    config.write_text(
+        f"[vault]\nroot = '{vault}'\n\n[database]\npath = '{db}'\n",
+        encoding="utf-8",
+    )
     (vault / "alpha.md").write_text("# Alpha\n\nLinks to [[Missing Note]]", encoding="utf-8")
 
     async def exercise() -> None:
@@ -81,6 +93,7 @@ def test_module_entrypoint_supports_mcp_handshake(tmp_path):
             command=sys.executable,
             args=["-m", "synapse.mcp_server"],
             cwd=str(Path.cwd()),
+            env={"SYNAPSE_CONFIG": str(config)},
         )
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
