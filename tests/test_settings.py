@@ -18,30 +18,30 @@ from synapse.settings import load_settings
 from synapse.vector_store import SQLiteVecStore, create_vector_store
 
 
-def test_load_settings_reads_pplx_4b_provider_defaults():
+def test_load_settings_reads_pplx_06b_provider_defaults():
     settings = load_settings("config/synapse.example.toml")
 
     provider = settings.embedding_provider("default")
     assert provider.type == "infinity"
-    assert provider.model == "perplexity-ai/pplx-embed-v1-4b"
+    assert provider.model == "perplexity-ai/pplx-embed-v1-0.6b"
     assert provider.base_url == "http://127.0.0.1:8081"
-    assert provider.dimensions == 2560
+    assert provider.dimensions == 1024
 
     contextual = settings.contextual_embedding_provider()
-    assert contextual.model == "perplexity-ai/pplx-embed-context-v1-4b"
+    assert contextual.model == "perplexity-ai/pplx-embed-context-v1-0.6b"
     assert contextual.base_url == "http://127.0.0.1:8081"
-    assert contextual.dimensions == 2560
+    assert contextual.dimensions == 1024
     assert contextual.context_strategy == "infinity_batch"
 
-    assert settings.index.max_chunk_chars == 3200
-    assert settings.index.min_chunk_chars == 1200
-    assert settings.index.target_chunk_tokens == 480
-    assert settings.index.max_chunk_tokens == 900
-    assert settings.index.chunk_overlap_chars == 220
+    assert settings.index.max_chunk_chars == 1400
+    assert settings.index.min_chunk_chars == 700
+    assert settings.index.target_chunk_tokens == 256
+    assert settings.index.max_chunk_tokens == 400
+    assert settings.index.chunk_overlap_chars == 120
     assert settings.index.chunk_strategy == "hybrid"
-    assert settings.search.candidate_multiplier == 4
-    assert settings.search.note_weight == 0.4
-    assert settings.search.chunk_weight == 0.6
+    assert settings.search.candidate_multiplier == 10
+    assert settings.search.note_weight == 0.5
+    assert settings.search.chunk_weight == 0.5
     assert settings.cipher.default_timeout_seconds == 45.0
     assert settings.cipher.explain_timeout_seconds == 45.0
     assert settings.cipher.chunking_timeout_seconds == 30.0
@@ -130,7 +130,7 @@ def test_embedding_client_selects_infinity_adapter():
     client = EmbeddingClient(
         provider_type="infinity",
         base_url="http://127.0.0.1:8081",
-        model="perplexity-ai/pplx-embed-v1-4b",
+        model="perplexity-ai/pplx-embed-v1-0.6b",
     )
 
     assert isinstance(client.adapter, InfinityEmbeddingAdapter)
@@ -151,7 +151,7 @@ def test_embedding_client_allows_explicit_context_strategy_override():
     client = EmbeddingClient(
         provider_type="infinity",
         base_url="http://127.0.0.1:8081",
-        model="perplexity-ai/pplx-embed-context-v1-4b",
+        model="perplexity-ai/pplx-embed-context-v1-0.6b",
         context_strategy="enriched_fallback",
     )
 
@@ -163,7 +163,7 @@ def test_create_vector_store_returns_sqlite_wrapper(tmp_path):
     store = create_vector_store(
         settings,
         db_path=tmp_path / "synapse.sqlite",
-        embedding_dim=2560,
+        embedding_dim=1024,
     )
 
     assert isinstance(store, SQLiteVecStore)
@@ -315,7 +315,7 @@ def test_infinity_contextual_embeddings_use_batch_embeddings_endpoint(monkeypatc
     client = EmbeddingClient(
         provider_type="infinity",
         base_url="http://127.0.0.1:8081",
-        model="perplexity-ai/pplx-embed-context-v1-4b",
+        model="perplexity-ai/pplx-embed-context-v1-0.6b",
         dimensions=2,
     )
     embeddings = client.embed_document_chunks(["chunk one", "chunk two"])

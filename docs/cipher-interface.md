@@ -134,7 +134,7 @@ Input:
 ```json
 {
   "op": "suggest_chunking_strategy",
-  "model_info": "perplexity-ai/pplx-embed-context-v1-4b, 2560 dimensions, 32k context"
+  "model_info": "perplexity-ai/pplx-embed-context-v1-0.6b, 1024 dimensions, 32k context"
 }
 ```
 

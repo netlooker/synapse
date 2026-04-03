@@ -157,7 +157,7 @@ def test_cipher_chunking_tool_reports_structured_timeout_error():
     async def exercise() -> None:
         with pytest.raises(RuntimeError) as exc_info:
             await server._tool_manager._tools["synapse_cipher_chunking_strategy"].fn(
-                model_info="2560-dim embeddings",
+                model_info="1024-dim embeddings",
             )
         assert "timeout" in str(exc_info.value)
         assert "1.0" in str(exc_info.value)

@@ -106,10 +106,10 @@ Optional markdown features that improve results:
 
 ## Known Good Runtime Shape
 
-The project is currently optimized for:
+The tracked example config is currently optimized for:
 
-- note embeddings from `perplexity-ai/pplx-embed-v1-4b`
-- contextual chunk embeddings from `perplexity-ai/pplx-embed-context-v1-4b`
+- note embeddings from `perplexity-ai/pplx-embed-v1-0.6b`
+- contextual chunk embeddings from `perplexity-ai/pplx-embed-context-v1-0.6b`
 - providers served by Infinity or Ollama
 - local vector storage via `sqlite-vec`
 

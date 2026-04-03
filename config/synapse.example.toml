@@ -12,20 +12,20 @@ type = "sqlite_vec"
 [index]
 provider = "default"
 contextual_provider = "contextual"
-min_chunk_chars = 1200
-max_chunk_chars = 3200
-target_chunk_tokens = 480
-max_chunk_tokens = 900
-chunk_overlap_chars = 220
+min_chunk_chars = 700
+max_chunk_chars = 1400
+target_chunk_tokens = 256
+max_chunk_tokens = 400
+chunk_overlap_chars = 120
 chunk_strategy = "hybrid"
 
 [search]
 provider = "default"
 limit = 5
 mode = "hybrid"
-candidate_multiplier = 4
-note_weight = 0.4
-chunk_weight = 0.6
+candidate_multiplier = 10
+note_weight = 0.5
+chunk_weight = 0.5
 
 [cipher]
 default_timeout_seconds = 45
@@ -35,16 +35,16 @@ stub_review_timeout_seconds = 45
 
 [providers.embeddings.default]
 type = "infinity"
-model = "perplexity-ai/pplx-embed-v1-4b"
+model = "perplexity-ai/pplx-embed-v1-0.6b"
 base_url = "http://127.0.0.1:8081"
-dimensions = 2560
+dimensions = 1024
 encoding_format = "float"
 
 [providers.embeddings.contextual]
 type = "infinity"
-model = "perplexity-ai/pplx-embed-context-v1-4b"
+model = "perplexity-ai/pplx-embed-context-v1-0.6b"
 base_url = "http://127.0.0.1:8081"
-dimensions = 2560
+dimensions = 1024
 encoding_format = "float"
 context_strategy = "infinity_batch"
 

@@ -30,7 +30,7 @@ Optional, but useful:
 
 - a reasoning model endpoint for `Cipher`
 - a local Ollama server for lightweight reasoning
-- an Infinity server for `pplx-embed-v1-4b` and `pplx-embed-context-v1-4b`
+- an Infinity server for `pplx-embed-v1-0.6b` and `pplx-embed-context-v1-0.6b`
 
 If no reasoning model is configured, the core MCP retrieval tools can still work.
 
@@ -66,8 +66,8 @@ Required for indexing and search:
 
 Recommended default profile:
 
-- `perplexity-ai/pplx-embed-v1-4b`
-- `perplexity-ai/pplx-embed-context-v1-4b`
+- `perplexity-ai/pplx-embed-v1-0.6b`
+- `perplexity-ai/pplx-embed-context-v1-0.6b`
 
 Current known-good runtimes:
 

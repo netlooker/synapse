@@ -114,8 +114,7 @@ Current codebase includes:
 
 Recently verified live:
 
-- Infinity-served `perplexity-ai/pplx-embed-v1-4b`
-- Infinity-served `perplexity-ai/pplx-embed-context-v1-4b`
+- Infinity-served Perplexity embedding models
 - end-to-end indexing, hybrid search, and discovery against the generic fixture vault
 
 For the technical map of the system, see [docs/architecture.md](docs/architecture.md).
@@ -127,30 +126,49 @@ Synapse now uses:
 - a tracked template: [config/synapse.example.toml](config/synapse.example.toml)
 - a local runtime config: `config/synapse.toml` (gitignored)
 
-Default provider setup is optimized for Perplexity `4B` embeddings served locally through Infinity, with Ollama as a fallback.
+The tracked example config is optimized for `perplexity-ai/pplx-embed-v1-0.6b` and `perplexity-ai/pplx-embed-context-v1-0.6b` served through Infinity, with Ollama as a fallback.
 
 Current default profile:
 
-- note embeddings: `perplexity-ai/pplx-embed-v1-4b`
-- contextual chunk embeddings: `perplexity-ai/pplx-embed-context-v1-4b`
+- note embeddings: `perplexity-ai/pplx-embed-v1-0.6b`
+- contextual chunk embeddings: `perplexity-ai/pplx-embed-context-v1-0.6b`
 - fallback embeddings: `nomic-embed-text:v1.5`
 - `Cipher` timeout defaults configured in `[cipher]`
-- note and contextual provider dimensions must match for hybrid retrieval; the default profile keeps both at `2560`
+- note and contextual provider dimensions must match for hybrid retrieval; the shipped example keeps both at `1024`
+- chunking defaults are tuned for Synapse's hybrid chunker, targeting medium 0.6B-sized chunks instead of directly mirroring training-time paper settings
 
 Example:
 
 ```toml
+[index]
+provider = "default"
+contextual_provider = "contextual"
+min_chunk_chars = 700
+max_chunk_chars = 1400
+target_chunk_tokens = 256
+max_chunk_tokens = 400
+chunk_overlap_chars = 120
+chunk_strategy = "hybrid"
+
+[search]
+provider = "default"
+limit = 5
+mode = "hybrid"
+candidate_multiplier = 10
+note_weight = 0.5
+chunk_weight = 0.5
+
 [providers.embeddings.default]
 type = "infinity"
-model = "perplexity-ai/pplx-embed-v1-4b"
+model = "perplexity-ai/pplx-embed-v1-0.6b"
 base_url = "http://127.0.0.1:8081"
-dimensions = 2560
+dimensions = 1024
 
 [providers.embeddings.contextual]
 type = "infinity"
-model = "perplexity-ai/pplx-embed-context-v1-4b"
+model = "perplexity-ai/pplx-embed-context-v1-0.6b"
 base_url = "http://127.0.0.1:8081"
-dimensions = 2560
+dimensions = 1024
 
 [providers.embeddings.fallback]
 type = "ollama"
@@ -281,7 +299,7 @@ uv run synapse-index \
   --config config/synapse.toml \
   --provider default \
   --base-url http://127.0.0.1:8081 \
-  --model perplexity-ai/pplx-embed-v1-4b
+  --model perplexity-ai/pplx-embed-v1-0.6b
 ```
 
 ### Search semantically

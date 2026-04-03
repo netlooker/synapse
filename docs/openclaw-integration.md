@@ -143,18 +143,19 @@ Important sections:
 Important constraint:
 
 - for hybrid retrieval, note and contextual providers must use matching dimensions
-- the default `4B` profile keeps both note and contextual embeddings at `2560`
+- the tracked example profile keeps both note and contextual embeddings at `1024`
+- the tracked example chunk/search defaults are tuned for Synapse's hybrid chunking around the `0.6B` Perplexity pair
 
 Current known-good provider examples:
 
 - Infinity:
   - `type = "infinity"`
   - `base_url = "http://HOST:8081"`
-  - `model = "perplexity-ai/pplx-embed-v1-4b"`
-  - `dimensions = 2560`
+  - `model = "perplexity-ai/pplx-embed-v1-0.6b"`
+  - `dimensions = 1024`
 - Infinity contextual:
   - `type = "infinity"`
-  - `model = "perplexity-ai/pplx-embed-context-v1-4b"`
+  - `model = "perplexity-ai/pplx-embed-context-v1-0.6b"`
   - `context_strategy = "infinity_batch"`
 - Ollama fallback:
   - `type = "ollama"`

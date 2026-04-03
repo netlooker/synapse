@@ -102,8 +102,8 @@ Important modules:
 
 Current known-good setup:
 
-- note embeddings from `perplexity-ai/pplx-embed-v1-4b`
-- contextual chunk embeddings from `perplexity-ai/pplx-embed-context-v1-4b`
+- note embeddings from `perplexity-ai/pplx-embed-v1-0.6b`
+- contextual chunk embeddings from `perplexity-ai/pplx-embed-context-v1-0.6b`
 - served locally through Infinity or Ollama
 
 ## Configuration Model

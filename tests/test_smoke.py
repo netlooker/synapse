@@ -26,7 +26,7 @@ def _health_response(db_path: str) -> HealthResponse:
         type="infinity",
         model="example",
         base_url="http://127.0.0.1:8081",
-        dimensions=2560,
+        dimensions=1024,
         context_strategy="infinity_batch",
     )
     return HealthResponse(
