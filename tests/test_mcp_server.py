@@ -56,6 +56,7 @@ def test_build_server_returns_fastmcp_instance():
     assert isinstance(server, FastMCP)
     tool_names = set(server._tool_manager._tools.keys())
     assert "synapse_health" in tool_names
+    assert "synapse_cipher_health" in tool_names
     assert "synapse_cipher_audit" in tool_names
     assert "synapse_cipher_explain" in tool_names
     assert "synapse_cipher_chunking_strategy" in tool_names
@@ -103,6 +104,7 @@ def test_module_entrypoint_supports_mcp_handshake(tmp_path):
                 tools = await session.list_tools()
                 tool_names = {tool.name for tool in tools.tools}
                 assert "synapse_health" in tool_names
+                assert "synapse_cipher_health" in tool_names
 
                 health = await session.call_tool(
                     "synapse_health",
@@ -115,10 +117,23 @@ def test_module_entrypoint_supports_mcp_handshake(tmp_path):
                 text_parts = [item.text for item in health.content if hasattr(item, "text")]
                 assert any("ready_for_indexing" in text for text in text_parts)
 
+                cipher_health = await session.call_tool(
+                    "synapse_cipher_health",
+                    {
+                        "config_path": "config/synapse.example.toml",
+                        "vault_root": str(vault),
+                        "db_path": str(db),
+                    },
+                )
+                cipher_health_text = "\n".join(
+                    item.text for item in cipher_health.content if hasattr(item, "text")
+                )
+                assert "ready_for_indexing" in cipher_health_text
+
                 audit = await session.call_tool(
                     "synapse_cipher_audit",
                     {
-                        "cortex_path": str(vault),
+                        "vault_root": str(vault),
                         "synapse_db": str(db),
                     },
                 )
@@ -143,6 +158,17 @@ def test_cipher_explain_tool_supports_model_backed_output():
         assert "semantic memory" in result["explanation"]
 
     anyio.run(exercise)
+
+
+def test_cipher_health_tool_matches_runtime_requirements():
+    server = build_server()
+    result = server._tool_manager._tools["synapse_cipher_health"].fn(
+        config_path="config/synapse.example.toml",
+        vault_root="/tmp/vault",
+        db_path="/tmp/synapse.sqlite",
+    )
+    assert result["vault_root"] == "/tmp/vault"
+    assert result["database_path"] == "/tmp/synapse.sqlite"
 
 
 def test_cipher_chunking_tool_reports_structured_timeout_error():

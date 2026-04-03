@@ -107,6 +107,24 @@ class TestEmbeddingClient:
         assert len(embeddings) == 3
         assert all(len(emb) == 4 for emb in embeddings)
 
+    def test_http_embedding_adapter_rejects_non_numeric_values(self):
+        from synapse.providers.embeddings.base import HTTPEndpointEmbeddingAdapter
+
+        class FakeHTTPAdapter(HTTPEndpointEmbeddingAdapter):
+            def _post_json(self, path: str, payload: dict) -> dict:
+                return {"data": [{"embedding": [None, 1.0, 2.0]}]}
+
+        adapter = FakeHTTPAdapter(
+            base_url="http://127.0.0.1:7997",
+            model="example",
+            dimensions=3,
+            api_key=None,
+            encoding_format="float",
+        )
+
+        with pytest.raises(ValueError, match="non-numeric value"):
+            adapter.embed("hello")
+
 
 class TestCosineSimilarity:
     """Test cosine similarity calculation."""

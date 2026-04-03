@@ -242,7 +242,7 @@ What this does:
 ```bash
 uv run synapse-index \
   --config config/synapse.toml \
-  --cortex /path/to/markdown \
+  --vault-root /path/to/markdown \
   --db /path/to/synapse.sqlite
 ```
 
@@ -334,7 +334,7 @@ chunk_embedder = EmbeddingClient.from_provider(
 
 indexer = Indexer(
     db=store,
-    cortex_path=Path("/path/to/markdown"),
+    vault_root=Path("/path/to/markdown"),
     note_embedding_client=note_embedder,
     chunk_embedding_client=chunk_embedder,
     min_chunk_chars=settings.index.min_chunk_chars,
@@ -440,7 +440,7 @@ async def main():
     response = await service.handle(
         AuditVaultRequest(mode="audit"),
         CipherDeps(
-            cortex_path=Path("/path/to/markdown"),
+            vault_root=Path("/path/to/markdown"),
             synapse_db=Path("/path/to/synapse.sqlite"),
         ),
     )
@@ -465,7 +465,7 @@ async def main():
             doc_b="notes/weak-signals.md",
         ),
         CipherDeps(
-            cortex_path=Path("/path/to/markdown"),
+            vault_root=Path("/path/to/markdown"),
             synapse_db=Path("/path/to/synapse.sqlite"),
         ),
     )
@@ -510,6 +510,8 @@ For `Cipher`, the reasoning model currently follows the OpenAI-compatible enviro
 - `sqlite-vec` is the current supported vector backend.
 - `LanceDB` is planned, not live.
 - Infinity contextual behavior currently uses batch embeddings over `/embeddings`, not Perplexity's nested contextual endpoint. Native contextual requests exist for `openai_compatible` providers, but that is not the default Synapse profile.
+- for the tracked `0.6B` Infinity profile on Blackwell-class DGX hardware, prefer `float32`; an observed `float16` deployment returned invalid `null` embeddings for realistic markdown payloads while `/health`, `/models`, and short embedding probes still looked healthy
+- when debugging provider issues, test one real markdown note through `/embeddings`, not just a short string
 - Discovery thresholds are still being tuned across corpora. Treat them as heuristics, not hard guarantees.
 - `Cipher` audit is deterministic. Explanation, chunking strategy, and stub review are model-backed.
 - Synapse can run fully local when the configured providers point at local Infinity or Ollama endpoints, but provider endpoints may also be remote.

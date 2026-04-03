@@ -152,7 +152,7 @@ def load_settings(config_path: str | Path | None = None) -> AppSettings:
         vault=VaultSettings(
             root=os.environ.get(
                 "SYNAPSE_VAULT_PATH",
-                os.environ.get("CORTEX_PATH", vault.get("root", DEFAULT_VAULT_PATH)),
+                vault.get("root", DEFAULT_VAULT_PATH),
             ),
             include=tuple(vault.get("include", ("**/*.md",))),
             exclude=tuple(vault.get("exclude", (".obsidian/**", ".git/**", "__pycache__/**"))),

@@ -40,7 +40,7 @@ from .settings import load_settings
 
 
 class CipherDepsModel(BaseModel):
-    cortex_path: str
+    vault_root: str
     synapse_db: str
     wraith_root: str | None = None
 
@@ -164,6 +164,8 @@ def create_app(cipher_service: CipherService | None = None):
     )
     async def post_cipher_audit(request: CipherAuditApiRequest) -> AuditVaultResponse:
         try:
+            settings = load_settings(request.config_path)
+            cipher.settings = settings.cipher
             return await cipher.handle(
                 AuditVaultRequest(mode=request.mode),
                 _cipher_deps(request.deps),
@@ -187,7 +189,7 @@ def create_app(cipher_service: CipherService | None = None):
                     doc_b=request.doc_b,
                     timeout_seconds=request.timeout_seconds,
                 ),
-                CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+                CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
             )
         except Exception as exc:  # pragma: no cover - exercised through tests
             raise map_error(exc) from exc
@@ -209,7 +211,7 @@ def create_app(cipher_service: CipherService | None = None):
                     model_info=request.model_info,
                     timeout_seconds=request.timeout_seconds,
                 ),
-                CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+                CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
             )
         except Exception as exc:  # pragma: no cover - exercised through tests
             raise map_error(exc) from exc
@@ -232,7 +234,7 @@ def create_app(cipher_service: CipherService | None = None):
                     stub_dir=request.stub_dir,
                     timeout_seconds=request.timeout_seconds,
                 ),
-                CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+                CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
             )
         except Exception as exc:  # pragma: no cover - exercised through tests
             raise map_error(exc) from exc
@@ -254,7 +256,7 @@ def main() -> None:
 
 def _cipher_deps(deps: CipherDepsModel) -> CipherDeps:
     return CipherDeps(
-        cortex_path=Path(deps.cortex_path).expanduser(),
+        vault_root=Path(deps.vault_root).expanduser(),
         synapse_db=Path(deps.synapse_db).expanduser(),
         wraith_root=Path(deps.wraith_root).expanduser() if deps.wraith_root else None,
     )

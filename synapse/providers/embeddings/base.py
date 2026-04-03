@@ -134,7 +134,14 @@ class HTTPEndpointEmbeddingAdapter(BaseEmbeddingAdapter):
             raise ValueError(
                 f"Embedding dimension mismatch: expected {self.dimensions}, got {len(embedding)}"
             )
-        return embedding
+        normalized: list[float] = []
+        for index, value in enumerate(embedding):
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"Embedding payload contains non-numeric value at index {index}: {value!r}"
+                )
+            normalized.append(float(value))
+        return normalized
 
     def embed(self, text: str) -> list[float]:
         if not text or not text.strip():

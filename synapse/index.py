@@ -364,16 +364,16 @@ def _build_overlap(text: str, overlap_chars: int) -> str:
 
 
 def find_markdown_files(
-    cortex_path: Path,
+    vault_root: Path,
     include_patterns: tuple[str, ...] = ("**/*.md",),
     exclude_patterns: tuple[str, ...] = (".obsidian/**", ".git/**", "__pycache__/**"),
 ) -> list[Path]:
     """Find markdown files under the configured root honoring include/exclude patterns."""
     files: list[Path] = []
-    for path in cortex_path.rglob("*"):
+    for path in vault_root.rglob("*"):
         if not path.is_file():
             continue
-        rel_path = _relative_markdown_path(path, cortex_path)
+        rel_path = _relative_markdown_path(path, vault_root)
         if not _matches_any(rel_path, include_patterns):
             continue
         if _matches_any(rel_path, exclude_patterns):
@@ -435,9 +435,9 @@ def build_note_embedding_text(content: str, title: str | None, path: str | None 
     body = re.sub(r"^---\s*\n.*?\n---\s*\n", "", content, flags=re.DOTALL).strip()
     parts = []
     if title:
-        parts.append(f"Title: {title}")
+        parts.append(f"Title {title}")
     if path:
-        parts.append(f"Path: {path}")
+        parts.append(f"Path {path}")
     if body:
         parts.append(body)
     return "\n\n".join(parts).strip()
@@ -449,7 +449,7 @@ class Indexer:
     def __init__(
         self,
         db: VectorStore,
-        cortex_path: Path,
+        vault_root: Path,
         embedding_client: EmbeddingService | None = None,
         note_embedding_client: EmbeddingService | None = None,
         chunk_embedding_client: EmbeddingService | None = None,
@@ -465,7 +465,7 @@ class Indexer:
         exclude_patterns: tuple[str, ...] = (".obsidian/**", ".git/**", "__pycache__/**"),
     ):
         self.db = db
-        self.cortex_path = Path(cortex_path)
+        self.vault_root = Path(vault_root)
         default_embedder = embedding_client or EmbeddingClient(
             base_url=embedding_host or "http://127.0.0.1:11434",
             model=embedding_model or "nomic-embed-text:v1.5",
@@ -493,7 +493,7 @@ class Indexer:
         title = extract_title(content)
         
         # Relative path for storage
-        rel_path = _relative_markdown_path(file_path, self.cortex_path)
+        rel_path = _relative_markdown_path(file_path, self.vault_root)
         
         # Check if already indexed with same hash
         existing = self.db.get_document(rel_path)
@@ -564,7 +564,7 @@ class Indexer:
         Returns aggregate stats.
         """
         files = find_markdown_files(
-            self.cortex_path,
+            self.vault_root,
             include_patterns=self.include_patterns,
             exclude_patterns=self.exclude_patterns,
         )
@@ -605,9 +605,9 @@ def main():
         help="Path to Synapse TOML config (defaults to config/synapse.toml)"
     )
     parser.add_argument(
-        "--cortex", 
+        "--vault-root",
         default=None,
-        help="Path to markdown root"
+        help="Path to vault root"
     )
     parser.add_argument(
         "--db",
@@ -648,11 +648,11 @@ def main():
     model = args.model or note_provider.model
     base_url = args.base_url or note_provider.base_url
     
-    cortex_path = Path(args.cortex or settings.vault.root).expanduser()
+    vault_root = Path(args.vault_root or settings.vault.root).expanduser()
     db_path = Path(args.db or settings.database.path).expanduser()
     
     print(f"🧠 Synapse Indexer")
-    print(f"   Markdown Root: {cortex_path}")
+    print(f"   Vault Root: {vault_root}")
     print(f"   Database: {db_path}")
     print(f"   Note Provider: {note_provider.name} ({note_provider.type})")
     print(f"   Chunk Provider: {chunk_provider.name} ({chunk_provider.type})")
@@ -667,7 +667,7 @@ def main():
     
     indexer = Indexer(
         db=db,
-        cortex_path=cortex_path,
+        vault_root=vault_root,
         note_embedding_client=EmbeddingClient(
             provider_type=note_provider.type,
             base_url=base_url,
@@ -697,7 +697,7 @@ def main():
     )
     
     # Run indexing
-    print("📚 Scanning markdown root...")
+    print("📚 Scanning vault root...")
     stats = indexer.index_all()
     
     print()

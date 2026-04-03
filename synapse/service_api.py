@@ -219,7 +219,7 @@ def index_vault(request: IndexRequest) -> IndexResponse:
     try:
         indexer = Indexer(
             db=store,
-            cortex_path=root,
+            vault_root=root,
             note_embedding_client=EmbeddingClient.from_provider(note_cfg),
             chunk_embedding_client=EmbeddingClient.from_provider(chunk_cfg),
             min_chunk_chars=settings.index.min_chunk_chars,

@@ -191,25 +191,25 @@ Beta
 
 
 class TestFileScanning:
-    """Test cortex file discovery."""
+    """Test vault file discovery."""
 
     def test_find_markdown_files(self):
-        """Should find all .md files in cortex directory."""
+        """Should find all .md files in vault directory."""
         from synapse.index import find_markdown_files
         
         with tempfile.TemporaryDirectory() as tmpdir:
-            cortex = Path(tmpdir) / "cortex"
-            cortex.mkdir()
-            (cortex / "entities").mkdir()
-            (cortex / "intel").mkdir()
+            vault_root = Path(tmpdir) / "vault"
+            vault_root.mkdir()
+            (vault_root / "entities").mkdir()
+            (vault_root / "intel").mkdir()
             
             # Create test files
-            (cortex / "entities" / "Test1.md").write_text("# Test 1")
-            (cortex / "entities" / "Test2.md").write_text("# Test 2")
-            (cortex / "intel" / "Report.md").write_text("# Report")
-            (cortex / "README.txt").write_text("Not markdown")
+            (vault_root / "entities" / "Test1.md").write_text("# Test 1")
+            (vault_root / "entities" / "Test2.md").write_text("# Test 2")
+            (vault_root / "intel" / "Report.md").write_text("# Report")
+            (vault_root / "README.txt").write_text("Not markdown")
             
-            files = find_markdown_files(cortex)
+            files = find_markdown_files(vault_root)
             
             assert len(files) == 3
             assert all(f.suffix == ".md" for f in files)
@@ -291,10 +291,10 @@ class TestIndexer:
         with tempfile.TemporaryDirectory() as tmpdir:
             # Setup
             db_path = Path(tmpdir) / "synapse.sqlite"
-            cortex = Path(tmpdir) / "cortex"
-            cortex.mkdir()
+            vault_root = Path(tmpdir) / "vault"
+            vault_root.mkdir()
             
-            test_file = cortex / "test.md"
+            test_file = vault_root / "test.md"
             test_file.write_text("""---
 type: entity
 ---
@@ -310,7 +310,7 @@ This is a test entity about programming.
             
             indexer = Indexer(
                 db=db,
-                cortex_path=cortex,
+                vault_root=vault_root,
                 embedding_client=FakeEmbedder(),
             )
             
@@ -320,10 +320,25 @@ This is a test entity about programming.
             assert stats["chunks_created"] > 0
             
             # Verify in database
-            doc = db.get_document(str(test_file.relative_to(cortex)))
+            doc = db.get_document(str(test_file.relative_to(vault_root)))
             assert doc is not None
             
             db.close()
+
+    def test_build_note_embedding_text_avoids_colon_prefixed_metadata_lines(self):
+        from synapse.index import build_note_embedding_text
+
+        content = """# Test Entity
+
+Body text.
+"""
+
+        text = build_note_embedding_text(content, "Test Entity", "notes/test.md")
+
+        assert "Title Test Entity" in text
+        assert "Path notes/test.md" in text
+        assert "Title: Test Entity" not in text
+        assert "Path: notes/test.md" not in text
 
     def test_index_file_creates_note_and_chunk_scopes(self):
         """Indexing should persist one note embedding plus chunk embeddings."""
@@ -339,10 +354,10 @@ This is a test entity about programming.
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "synapse.sqlite"
-            cortex = Path(tmpdir) / "cortex"
-            cortex.mkdir()
+            vault_root = Path(tmpdir) / "vault"
+            vault_root.mkdir()
 
-            test_file = cortex / "test.md"
+            test_file = vault_root / "test.md"
             test_file.write_text("""# Test Entity
 
 ## Overview
@@ -359,7 +374,7 @@ This section explains hidden links between notes.
 
             indexer = Indexer(
                 db=db,
-                cortex_path=cortex,
+                vault_root=vault_root,
                 embedding_client=FakeEmbedder(),
                 min_chunk_chars=10,
                 max_chunk_chars=400,
@@ -371,7 +386,7 @@ This section explains hidden links between notes.
 
             stats = indexer.index_file(test_file)
 
-            doc = db.get_document(str(test_file.relative_to(cortex)))
+            doc = db.get_document(str(test_file.relative_to(vault_root)))
             note_chunks = db.get_chunks(doc["id"], scope="note")
             text_chunks = db.get_chunks(doc["id"], scope="chunk")
 
@@ -393,10 +408,10 @@ This section explains hidden links between notes.
 
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "synapse.sqlite"
-            cortex = Path(tmpdir) / "cortex"
-            cortex.mkdir()
+            vault_root = Path(tmpdir) / "vault"
+            vault_root.mkdir()
 
-            test_file = cortex / "vector-maintenance.md"
+            test_file = vault_root / "vector-maintenance.md"
             test_file.write_text("""---
 tags: [embeddings, maintenance]
 status: Draft
@@ -412,12 +427,12 @@ This note links to [[Cipher]] and references #retrieval in the body.
 
             indexer = Indexer(
                 db=db,
-                cortex_path=cortex,
+                vault_root=vault_root,
                 embedding_client=FakeEmbedder(),
             )
             indexer.index_file(test_file)
 
-            doc = db.get_document(str(test_file.relative_to(cortex)))
+            doc = db.get_document(str(test_file.relative_to(vault_root)))
 
             assert "embeddings" in doc["tags"]
             assert "retrieval" in doc["tags"]
@@ -450,7 +465,7 @@ This note links to [[Cipher]] and references #retrieval in the body.
 
             indexer = Indexer(
                 db=db,
-                cortex_path=root,
+                vault_root=root,
                 embedding_client=FakeEmbedder(),
             )
             indexer.index_file(test_file)

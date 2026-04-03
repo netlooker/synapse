@@ -83,7 +83,7 @@ def build_index(config_path: Path, db_path: Path, context_strategy: str) -> tupl
     db.initialize()
     indexer = Indexer(
         db=db,
-        cortex_path=FIXTURE_VAULT,
+        vault_root=FIXTURE_VAULT,
         note_embedding_client=EmbeddingClient.from_provider(note_provider),
         chunk_embedding_client=EmbeddingClient.from_provider(chunk_provider),
         min_chunk_chars=settings.index.min_chunk_chars,

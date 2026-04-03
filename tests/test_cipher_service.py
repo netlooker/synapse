@@ -24,7 +24,7 @@ async def test_cipher_service_explain_connection_is_lazy():
 
     response = await service.handle(
         ExplainConnectionRequest(doc_a="a.md", doc_b="b.md"),
-        CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+        CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
     )
 
     assert "semantic maintenance" in response.explanation
@@ -41,7 +41,7 @@ async def test_cipher_service_audit_vault_finds_broken_links(tmp_path):
     service = CipherService(model=TestModel(custom_output_text="Keep the vault tidy."))
     response = await service.handle(
         AuditVaultRequest(mode="audit"),
-        CipherDeps(cortex_path=vault, synapse_db=tmp_path / "synapse.sqlite"),
+        CipherDeps(vault_root=vault, synapse_db=tmp_path / "synapse.sqlite"),
     )
 
     assert response.status == "ok"
@@ -59,7 +59,7 @@ async def test_cipher_service_returns_typed_chunking_strategy():
 
     response = await service.handle(
         SuggestChunkingStrategyRequest(model_info="1024-dim embeddings, 32k context"),
-        CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+        CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
     )
 
     assert response.max_chunk_size == 1800
@@ -90,7 +90,7 @@ async def test_cipher_service_reviews_stub_candidates():
             ],
             stub_dir="entities",
         ),
-        CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+        CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
     )
 
     assert response.reviews[0].action == "create_stub"
@@ -110,7 +110,7 @@ async def test_cipher_service_explain_times_out(monkeypatch):
     with pytest.raises(SynapseTimeoutError) as exc_info:
         await service.handle(
             ExplainConnectionRequest(doc_a="a.md", doc_b="b.md"),
-            CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+            CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
         )
 
     assert exc_info.value.timeout_seconds == 0.01
@@ -128,7 +128,7 @@ async def test_cipher_service_wraps_reasoning_dependency_failure(monkeypatch):
     with pytest.raises(SynapseDependencyError) as exc_info:
         await service.handle(
             ExplainConnectionRequest(doc_a="a.md", doc_b="b.md"),
-            CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+            CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
         )
 
     assert exc_info.value.dependency == "reasoning_model"

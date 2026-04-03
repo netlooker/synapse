@@ -70,9 +70,9 @@ class TestDiscoveryDataclass:
     def test_discovery_creation(self):
         """Create a discovery instance."""
         d = Discovery(
-            source_path="cortex/entities/Python.md",
+            source_path="vault/entities/Python.md",
             source_title="Python",
-            target_path="cortex/entities/Elixir.md",
+            target_path="vault/entities/Elixir.md",
             target_title="Elixir",
             similarity=0.75
         )
@@ -111,25 +111,25 @@ class TestDiscoverForDocument:
 
         docs = [
             {
-                "path": "cortex/entities/DocA.md",
+                "path": "vault/entities/DocA.md",
                 "title": "DocA",
                 "content": "Document A links to [[DocB]] but not C.",
                 "embedding": pad_emb([1.0, 0.0, 0.0])
             },
             {
-                "path": "cortex/entities/DocB.md",
+                "path": "vault/entities/DocB.md",
                 "title": "DocB",
                 "content": "Document B, linked from A.",
                 "embedding": pad_emb([0.9, 0.1, 0.0])
             },
             {
-                "path": "cortex/entities/DocC.md",
+                "path": "vault/entities/DocC.md",
                 "title": "DocC",
                 "content": "Document C, not linked anywhere.",
                 "embedding": pad_emb([0.95, 0.05, 0.0])
             },
             {
-                "path": "cortex/entities/DocD.md",
+                "path": "vault/entities/DocD.md",
                 "title": "DocD",
                 "content": "Document D, completely different.",
                 "embedding": pad_emb([0.0, 0.0, 1.0])
@@ -149,7 +149,7 @@ class TestDiscoverForDocument:
         """Should discover DocC as similar but unlinked to DocA."""
         discoveries = discover_for_document(
             mock_db,
-            doc_path="cortex/entities/DocA.md",
+            doc_path="vault/entities/DocA.md",
             top_k=5,
             threshold=0.5
         )
@@ -162,7 +162,7 @@ class TestDiscoverForDocument:
         """Should NOT discover DocB since DocA links to it."""
         discoveries = discover_for_document(
             mock_db,
-            doc_path="cortex/entities/DocA.md",
+            doc_path="vault/entities/DocA.md",
             top_k=5,
             threshold=0.5
         )
@@ -174,7 +174,7 @@ class TestDiscoverForDocument:
         """Should NOT discover DocD since it's not similar."""
         discoveries = discover_for_document(
             mock_db,
-            doc_path="cortex/entities/DocA.md",
+            doc_path="vault/entities/DocA.md",
             top_k=5,
             threshold=0.5
         )
@@ -186,27 +186,27 @@ class TestDiscoverForDocument:
         """Should never suggest linking to self."""
         discoveries = discover_for_document(
             mock_db,
-            doc_path="cortex/entities/DocA.md",
+            doc_path="vault/entities/DocA.md",
             top_k=10,
             threshold=0.0  # Very low threshold
         )
         
         target_paths = [d.target_path for d in discoveries]
-        assert "cortex/entities/DocA.md" not in target_paths
+        assert "vault/entities/DocA.md" not in target_paths
 
     def test_respects_threshold(self, mock_db):
         """Should filter by similarity threshold."""
         # High threshold should return fewer results
         high_threshold = discover_for_document(
             mock_db,
-            doc_path="cortex/entities/DocA.md",
+            doc_path="vault/entities/DocA.md",
             top_k=10,
             threshold=0.99
         )
         
         low_threshold = discover_for_document(
             mock_db,
-            doc_path="cortex/entities/DocA.md",
+            doc_path="vault/entities/DocA.md",
             top_k=10,
             threshold=0.1
         )
@@ -300,7 +300,7 @@ class TestFindDiscoveries:
         ]
         
         for path, title, content, emb in docs:
-            full_path = f"cortex/entities/{path}"
+            full_path = f"vault/entities/{path}"
             doc_id = db.upsert_document(full_path, content, title)
             db.insert_chunk(doc_id, 0, content, emb)
         

@@ -49,7 +49,7 @@ async def test_gardener_dry_run_only_writes_approved_when_apply(tmp_path):
 
     await cultivate(
         db_path=db_path,
-        cortex_path=vault,
+        vault_root=vault,
         apply=False,
         settings=load_settings("config/synapse.example.toml"),
         embedding_dim=4,
@@ -59,7 +59,7 @@ async def test_gardener_dry_run_only_writes_approved_when_apply(tmp_path):
 
     await cultivate(
         db_path=db_path,
-        cortex_path=vault,
+        vault_root=vault,
         apply=True,
         settings=load_settings("config/synapse.example.toml"),
         embedding_dim=4,

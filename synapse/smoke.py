@@ -192,7 +192,7 @@ def run_smoke(
                         doc_b=cipher_doc_b,
                         timeout_seconds=settings.cipher.explain_timeout_seconds,
                     ),
-                    CipherDeps(cortex_path=resolved_vault, synapse_db=resolved_db),
+                    CipherDeps(vault_root=resolved_vault, synapse_db=resolved_db),
                 )
             )
             cipher_status = "passed"

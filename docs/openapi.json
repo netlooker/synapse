@@ -142,12 +142,12 @@
       },
       "CipherDepsModel": {
         "properties": {
-          "cortex_path": {
-            "title": "Cortex Path",
-            "type": "string"
-          },
           "synapse_db": {
             "title": "Synapse Db",
+            "type": "string"
+          },
+          "vault_root": {
+            "title": "Vault Root",
             "type": "string"
           },
           "wraith_root": {
@@ -163,7 +163,7 @@
           }
         },
         "required": [
-          "cortex_path",
+          "vault_root",
           "synapse_db"
         ],
         "title": "CipherDepsModel",

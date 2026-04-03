@@ -19,8 +19,8 @@ class TestLinkValidation:
         # DocA links to DocB (valid)
         # DocB links to NonExistent (broken)
         docs = [
-            ("cortex/entities/DocA.md", "DocA", "Links to [[DocB]]."),
-            ("cortex/entities/DocB.md", "DocB", "Links to [[NonExistent]]."),
+            ("vault/entities/DocA.md", "DocA", "Links to [[DocB]]."),
+            ("vault/entities/DocB.md", "DocB", "Links to [[NonExistent]]."),
         ]
         
         for path, title, content in docs:
@@ -36,7 +36,7 @@ class TestLinkValidation:
         broken = find_broken_links(mock_db)
         
         assert len(broken) == 1
-        assert broken[0].source_path == "cortex/entities/DocB.md"
+        assert broken[0].source_path == "vault/entities/DocB.md"
         assert broken[0].target_link == "NonExistent"
 
     def test_valid_links_ignored(self, mock_db):

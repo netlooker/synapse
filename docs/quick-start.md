@@ -35,6 +35,12 @@ If you want the default local profile from the template to work, make sure you h
 - Infinity serving Perplexity embedding models on `http://127.0.0.1:8081`
 - Ollama serving the fallback embedding model on `http://127.0.0.1:11434`
 
+Infinity note:
+
+- for the shipped `pplx-embed-v1-0.6b` and `pplx-embed-context-v1-0.6b` profile, prefer `float32` on Blackwell-class DGX systems
+- an observed `float16` deployment returned invalid `null` embeddings for real markdown notes while still passing short health probes
+- after changing model size or dtype, verify with `uv run synapse-smoke --config config/synapse.toml --with-cipher never`
+
 If you only want core indexing and search, you do not need to configure a reasoning model. `Cipher` is only required for reasoning-backed operations such as explanation and maintenance review.
 
 ## 4. Index your markdown folder
@@ -42,7 +48,7 @@ If you only want core indexing and search, you do not need to configure a reason
 ```bash
 uv run synapse-index \
   --config config/synapse.toml \
-  --cortex ~/notes \
+  --vault-root ~/notes \
   --db ~/notes/.synapse.sqlite
 ```
 

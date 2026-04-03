@@ -17,9 +17,9 @@ async def main():
     args = parser.parse_args()
 
     settings = load_settings(args.config)
-    cortex_path = settings.vault.root_path()
+    vault_root = settings.vault.root_path()
     synapse_db = settings.database.db_path()
-    deps = CipherDeps(cortex_path=cortex_path, synapse_db=synapse_db)
+    deps = CipherDeps(vault_root=vault_root, synapse_db=synapse_db)
 
     service = CipherService()
     strategy = await service.handle(

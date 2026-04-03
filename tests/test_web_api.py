@@ -124,7 +124,7 @@ def test_cipher_audit_endpoint_uses_real_request_model(tmp_path):
         json={
             "mode": "audit",
             "deps": {
-                "cortex_path": str(vault),
+                "vault_root": str(vault),
                 "synapse_db": str(tmp_path / "synapse.sqlite"),
             },
         },
@@ -133,6 +133,43 @@ def test_cipher_audit_endpoint_uses_real_request_model(tmp_path):
     assert response.status_code == 200
     payload = response.json()
     assert payload["broken_links"][0]["target_link"] == "Missing Note"
+
+
+def test_cipher_audit_endpoint_honors_config_path(tmp_path, monkeypatch):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+
+    service = CipherService(model=TestModel(custom_output_text="keep it clean"))
+    app = create_app(cipher_service=service)
+    client = TestClient(app)
+
+    loaded = {}
+
+    def fake_load_settings(config_path):
+        loaded["config_path"] = config_path
+
+        class Settings:
+            cipher = object()
+
+        return Settings()
+
+    monkeypatch.setattr("synapse.web_api.load_settings", fake_load_settings)
+
+    response = client.post(
+        "/cipher/audit",
+        json={
+            "mode": "audit",
+            "config_path": "config/synapse.example.toml",
+            "deps": {
+                "vault_root": str(vault),
+                "synapse_db": str(tmp_path / "synapse.sqlite"),
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert loaded["config_path"] == "config/synapse.example.toml"
+    assert service.settings is not None
 
 
 def test_cipher_explain_timeout_maps_to_504():

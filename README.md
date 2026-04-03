@@ -136,6 +136,11 @@ Current default profile:
 - `Cipher` timeout defaults configured in `[cipher]`
 - note and contextual provider dimensions must match for hybrid retrieval; the shipped example keeps both at `1024`
 - chunking defaults are tuned for Synapse's hybrid chunker, targeting medium 0.6B-sized chunks instead of directly mirroring training-time paper settings
+- on Blackwell-class DGX deployments, prefer `float32` when serving the `0.6B` Perplexity pair through Infinity; an observed `float16` deployment returned invalid `null` embeddings for realistic markdown inputs even though short probe requests looked healthy
+
+Operational check:
+
+- after changing Infinity dtype or model size, run `uv run synapse-smoke --config config/synapse.toml --with-cipher never` before indexing a real vault
 
 Example:
 
@@ -289,7 +294,7 @@ This command uses the bundled fixture vault and a fresh temporary DB by default 
 ### Index a markdown folder
 
 ```bash
-uv run synapse-index --config config/synapse.toml --cortex ~/notes --db ~/notes/.synapse.sqlite
+uv run synapse-index --config config/synapse.toml --vault-root ~/notes --db ~/notes/.synapse.sqlite
 ```
 
 Useful overrides:
@@ -331,13 +336,13 @@ uv run synapse-validate --config config/synapse.toml --db ~/notes/.synapse.sqlit
 ### Grow missing stubs
 
 ```bash
-uv run synapse-garden --config config/synapse.toml --db ~/notes/.synapse.sqlite --cortex ~/notes
+uv run synapse-garden --config config/synapse.toml --db ~/notes/.synapse.sqlite --vault-root ~/notes
 ```
 
 Apply only after Cipher review:
 
 ```bash
-uv run synapse-garden --config config/synapse.toml --db ~/notes/.synapse.sqlite --cortex ~/notes --apply
+uv run synapse-garden --config config/synapse.toml --db ~/notes/.synapse.sqlite --vault-root ~/notes --apply
 ```
 
 ## License

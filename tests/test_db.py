@@ -68,7 +68,7 @@ class TestDocumentOperations:
             db.initialize()
             
             doc_id = db.upsert_document(
-                path="cortex/entities/Test.md",
+                path="vault/entities/Test.md",
                 content_hash="abc123",
                 title="Test Entity"
             )
@@ -87,12 +87,12 @@ class TestDocumentOperations:
             db.initialize()
             
             db.upsert_document(
-                path="cortex/entities/Test.md",
+                path="vault/entities/Test.md",
                 content_hash="abc123",
                 title="Test Entity"
             )
             
-            doc = db.get_document("cortex/entities/Test.md")
+            doc = db.get_document("vault/entities/Test.md")
             assert doc is not None
             assert doc["title"] == "Test Entity"
             assert doc["content_hash"] == "abc123"
@@ -109,21 +109,21 @@ class TestDocumentOperations:
             
             # Insert
             doc_id1 = db.upsert_document(
-                path="cortex/entities/Test.md",
+                path="vault/entities/Test.md",
                 content_hash="abc123",
                 title="Test Entity"
             )
             
             # Update
             doc_id2 = db.upsert_document(
-                path="cortex/entities/Test.md",
+                path="vault/entities/Test.md",
                 content_hash="def456",
                 title="Test Entity Updated"
             )
             
             assert doc_id1 == doc_id2  # Same document
             
-            doc = db.get_document("cortex/entities/Test.md")
+            doc = db.get_document("vault/entities/Test.md")
             assert doc["content_hash"] == "def456"
             assert doc["title"] == "Test Entity Updated"
             db.close()
@@ -142,7 +142,7 @@ class TestChunkOperations:
             db.initialize()
             
             doc_id = db.upsert_document(
-                path="cortex/entities/Test.md",
+                path="vault/entities/Test.md",
                 content_hash="abc123",
                 title="Test"
             )

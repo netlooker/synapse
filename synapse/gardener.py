@@ -49,7 +49,7 @@ def _default_stub_path(stub_dir: str, target: str) -> str:
 
 async def cultivate(
     db_path: Path,
-    cortex_path: Path,
+    vault_root: Path,
     apply: bool = False,
     settings: AppSettings | None = None,
     embedding_dim: int = 768,
@@ -59,7 +59,7 @@ async def cultivate(
     """
     Review broken links and optionally create approved stubs.
     """
-    print(f"🌻 The Gardener is tending to {cortex_path}...")
+    print(f"🌻 The Gardener is tending to {vault_root}...")
     
     resolved_settings = settings or load_settings()
     db = create_vector_store(resolved_settings, db_path=db_path, embedding_dim=embedding_dim)
@@ -89,7 +89,7 @@ async def cultivate(
                 ],
                 stub_dir=stub_dir,
             ),
-            CipherDeps(cortex_path=cortex_path, synapse_db=db_path),
+            CipherDeps(vault_root=vault_root, synapse_db=db_path),
         )
 
         approved = [item for item in review.reviews if item.action == "create_stub"]
@@ -114,13 +114,13 @@ async def cultivate(
             print("\n🔍 Dry run complete. Re-run with --apply to write approved stubs.")
             return
 
-        stub_root = cortex_path / stub_dir
+        stub_root = vault_root / stub_dir
         stub_root.mkdir(parents=True, exist_ok=True)
         created_count = 0
 
         for item in approved:
             target = item.target_link
-            file_path = cortex_path / (item.suggested_path or _default_stub_path(stub_dir, target))
+            file_path = vault_root / (item.suggested_path or _default_stub_path(stub_dir, target))
             if file_path.exists():
                 print(f"⚠️  Skipping {target}: File exists but not indexed? (Run index)")
                 continue
@@ -134,7 +134,7 @@ async def cultivate(
 
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content, encoding="utf-8")
-            print(f"✨ Created: {file_path.relative_to(cortex_path)}")
+            print(f"✨ Created: {file_path.relative_to(vault_root)}")
             created_count += 1
 
         if created_count > 0:
@@ -156,9 +156,9 @@ def main():
         help="Path to synapse database"
     )
     parser.add_argument(
-        "--cortex", 
+        "--vault-root",
         default=None,
-        help="Path to markdown root"
+        help="Path to vault root"
     )
     parser.add_argument(
         "--stub-dir",
@@ -174,13 +174,13 @@ def main():
     args = parser.parse_args()
     settings = load_settings(args.config)
     db_path = Path(args.db or settings.database.path).expanduser()
-    cortex_path = Path(args.cortex or settings.vault.root).expanduser()
+    vault_root = Path(args.vault_root or settings.vault.root).expanduser()
     provider = settings.embedding_provider()
 
     asyncio.run(
         cultivate(
             db_path,
-            cortex_path,
+            vault_root,
             apply=args.apply,
             settings=settings,
             embedding_dim=provider.dimensions,

@@ -81,6 +81,22 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
             chunk_provider=chunk_provider,
         )
 
+    @mcp.tool(name="synapse_cipher_health", description="Report Cipher runtime requirements and readiness")
+    def synapse_cipher_health(
+        config_path: str | None = None,
+        vault_root: str | None = None,
+        db_path: str | None = None,
+        note_provider: str | None = None,
+        chunk_provider: str | None = None,
+    ) -> dict[str, Any]:
+        return runtime_requirements(
+            config_path=config_path,
+            vault_root=vault_root,
+            db_path=db_path,
+            note_provider=note_provider,
+            chunk_provider=chunk_provider,
+        )
+
     @mcp.tool(name="synapse_index", description="Index a markdown folder into Synapse")
     def synapse_index(
         config_path: str | None = None,
@@ -153,7 +169,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
 
     @mcp.tool(name="synapse_cipher_audit", description="Audit a markdown folder through Cipher")
     async def synapse_cipher_audit(
-        cortex_path: str,
+        vault_root: str,
         synapse_db: str,
         mode: str = "audit",
         wraith_root: str | None = None,
@@ -162,7 +178,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         return await _run_cipher_tool(
             cipher,
             AuditVaultRequest(mode=mode),
-            _cipher_deps(cortex_path=cortex_path, synapse_db=synapse_db, wraith_root=wraith_root),
+            _cipher_deps(vault_root=vault_root, synapse_db=synapse_db, wraith_root=wraith_root),
             config_path=config_path,
         )
 
@@ -176,7 +192,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         return await _run_cipher_tool(
             cipher,
             ExplainConnectionRequest(doc_a=doc_a, doc_b=doc_b, timeout_seconds=timeout_seconds),
-            CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+            CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
             config_path=config_path,
         )
 
@@ -195,7 +211,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
                 model_info=model_info,
                 timeout_seconds=timeout_seconds,
             ),
-            CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+            CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
             config_path=config_path,
         )
 
@@ -217,7 +233,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
                 stub_dir=stub_dir,
                 timeout_seconds=timeout_seconds,
             ),
-            CipherDeps(cortex_path=Path("."), synapse_db=Path(".")),
+            CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
             config_path=config_path,
         )
 
@@ -239,12 +255,12 @@ def _require_server_config() -> None:
 
 def _cipher_deps(
     *,
-    cortex_path: str,
+    vault_root: str,
     synapse_db: str,
     wraith_root: str | None = None,
 ) -> CipherDeps:
     return CipherDeps(
-        cortex_path=Path(cortex_path).expanduser(),
+        vault_root=Path(vault_root).expanduser(),
         synapse_db=Path(synapse_db).expanduser(),
         wraith_root=Path(wraith_root).expanduser() if wraith_root else None,
     )

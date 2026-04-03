@@ -42,9 +42,9 @@ async def main():
         logger.info(f"🌑 [Pulse {count}] Running Cipher Maintenance (repair={args.repair})...")
         
         settings = load_settings(args.config)
-        cortex_path = settings.vault.root_path()
+        vault_root = settings.vault.root_path()
         synapse_db = settings.database.db_path()
-        deps = CipherDeps(cortex_path=cortex_path, synapse_db=synapse_db)
+        deps = CipherDeps(vault_root=vault_root, synapse_db=synapse_db)
 
         service = CipherService()
         report = await service.handle(

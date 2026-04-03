@@ -19,7 +19,7 @@ from .settings import CipherSettings
 
 @dataclass(frozen=True)
 class CipherDeps:
-    cortex_path: Path
+    vault_root: Path
     synapse_db: Path
     wraith_root: Path | None = None
 
@@ -136,7 +136,7 @@ class CipherService:
         return self._agent
 
     async def _audit_vault(self, request: AuditVaultRequest, deps: CipherDeps) -> AuditVaultResponse:
-        broken_links = _scan_broken_links(deps.cortex_path)
+        broken_links = _scan_broken_links(deps.vault_root)
         suggested_actions: list[str] = []
         if broken_links:
             suggested_actions.append("repair_links")
@@ -258,9 +258,9 @@ class CipherService:
             ) from exc
 
 
-def _scan_broken_links(cortex_path: Path) -> list[dict[str, str]]:
+def _scan_broken_links(vault_root: Path) -> list[dict[str, str]]:
     valid_targets: set[str] = set()
-    markdown_files = list(cortex_path.rglob("*.md"))
+    markdown_files = list(vault_root.rglob("*.md"))
     for file_path in markdown_files:
         valid_targets.add(file_path.stem.lower())
 

@@ -236,7 +236,7 @@ Index:
 ```bash
 uv run synapse-index \
   --config config/synapse.toml \
-  --cortex /path/to/markdown \
+  --vault-root /path/to/markdown \
   --db /path/to/synapse.sqlite
 ```
 
