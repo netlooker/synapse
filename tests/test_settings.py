@@ -4,8 +4,11 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from synapse.embeddings import EmbeddingClient
 from synapse.db import Database
+from synapse.errors import SynapseNotFoundError
 from synapse.providers.embeddings import (
     InfinityEmbeddingAdapter,
     OllamaEmbeddingAdapter,
@@ -54,6 +57,18 @@ def test_load_settings_uses_generic_defaults_without_config(tmp_path, monkeypatc
 
     assert settings.vault.root == "~/notes"
     assert settings.database.path == "~/notes/.synapse.sqlite"
+
+
+def test_load_settings_raises_for_missing_explicit_config():
+    with pytest.raises(SynapseNotFoundError, match="Synapse config not found"):
+        load_settings("/tmp/does-not-exist-synapse.toml")
+
+
+def test_load_settings_raises_for_missing_env_config(monkeypatch):
+    monkeypatch.setenv("SYNAPSE_CONFIG", "/tmp/does-not-exist-from-env.toml")
+
+    with pytest.raises(SynapseNotFoundError, match="Synapse config not found"):
+        load_settings()
 
 
 def test_load_settings_applies_env_overrides(monkeypatch):

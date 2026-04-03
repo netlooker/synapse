@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .errors import SynapseNotFoundError
+
 
 DEFAULT_CONFIG_PATHS = (
     Path("config/synapse.toml"),
@@ -120,8 +122,8 @@ class AppSettings:
 
 def load_settings(config_path: str | Path | None = None) -> AppSettings:
     """Load settings from TOML with environment-based overrides."""
-    resolved_config_path = _resolve_config_path(config_path)
-    raw = _load_toml(resolved_config_path)
+    resolved_config_path, require_exists = _resolve_config_path(config_path)
+    raw = _load_toml(resolved_config_path, require_exists=require_exists)
 
     vault = raw.get("vault", {})
     index = raw.get("index", {})
@@ -236,23 +238,25 @@ def _apply_provider_env_overrides(settings: AppSettings) -> AppSettings:
     )
 
 
-def _load_toml(config_path: Path) -> dict[str, Any]:
+def _load_toml(config_path: Path, *, require_exists: bool = False) -> dict[str, Any]:
     if not config_path.exists():
+        if require_exists:
+            raise SynapseNotFoundError(f"Synapse config not found: {config_path}")
         return {}
     with config_path.open("rb") as handle:
         return tomllib.load(handle)
 
 
-def _resolve_config_path(config_path: str | Path | None) -> Path:
+def _resolve_config_path(config_path: str | Path | None) -> tuple[Path, bool]:
     if config_path:
-        return Path(config_path)
+        return Path(config_path), True
 
     env_path = os.environ.get("SYNAPSE_CONFIG")
     if env_path:
-        return Path(env_path)
+        return Path(env_path), True
 
     for candidate in DEFAULT_CONFIG_PATHS:
         if candidate.exists():
-            return candidate
+            return candidate, False
 
-    return DEFAULT_CONFIG_PATHS[0]
+    return DEFAULT_CONFIG_PATHS[0], False
