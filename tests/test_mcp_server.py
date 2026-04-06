@@ -6,6 +6,7 @@ import anyio
 import pytest
 from mcp.client.session import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.server.fastmcp.exceptions import ToolError
 from mcp.server.fastmcp import FastMCP
 from pydantic_ai.models.test import TestModel
 
@@ -56,11 +57,60 @@ def test_build_server_returns_fastmcp_instance():
     assert isinstance(server, FastMCP)
     tool_names = set(server._tool_manager._tools.keys())
     assert "synapse_health" in tool_names
+    assert "synapse_health_simple" in tool_names
     assert "synapse_cipher_health" in tool_names
+    assert "synapse_index_simple" in tool_names
+    assert "synapse_search_simple" in tool_names
     assert "synapse_cipher_audit" in tool_names
     assert "synapse_cipher_explain" in tool_names
     assert "synapse_cipher_chunking_strategy" in tool_names
     assert "synapse_cipher_review_stubs" in tool_names
+
+
+def test_health_tool_schema_describes_plain_string_paths():
+    server = build_server()
+    params = server._tool_manager._tools["synapse_health"].parameters["properties"]
+
+    assert "plain string filesystem path" in params["vault_root"]["description"].lower()
+    assert "nested objects" in params["vault_root"]["description"].lower()
+    assert "plain string filesystem path" in params["db_path"]["description"].lower()
+
+
+def test_health_tool_normalizes_common_nested_path_shapes(tmp_path):
+    server = build_server()
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    db = tmp_path / "synapse.sqlite"
+
+    async def exercise() -> None:
+        result = await server._tool_manager._tools["synapse_health"].run(
+            {
+                "config_path": "config/synapse.example.toml",
+                "vault_root": {"vault_root": str(vault)},
+                "db_path": {str(db): None},
+            }
+        )
+
+        assert result["vault_root"] == str(vault)
+        assert result["database_path"] == str(db)
+
+    anyio.run(exercise)
+
+
+def test_health_tool_rejects_unrepairable_nested_path_shapes():
+    server = build_server()
+
+    async def exercise() -> None:
+        with pytest.raises(ToolError, match="db_path must be a plain string path"):
+            await server._tool_manager._tools["synapse_health"].run(
+                {
+                    "config_path": "config/synapse.example.toml",
+                    "vault_root": "/tmp/vault",
+                    "db_path": {"db_path": True},
+                }
+            )
+
+    anyio.run(exercise)
 
 
 def test_example_mcp_config_is_valid_json():
@@ -104,7 +154,10 @@ def test_module_entrypoint_supports_mcp_handshake(tmp_path):
                 tools = await session.list_tools()
                 tool_names = {tool.name for tool in tools.tools}
                 assert "synapse_health" in tool_names
+                assert "synapse_health_simple" in tool_names
                 assert "synapse_cipher_health" in tool_names
+                assert "synapse_index_simple" in tool_names
+                assert "synapse_search_simple" in tool_names
 
                 health = await session.call_tool(
                     "synapse_health",
@@ -129,6 +182,18 @@ def test_module_entrypoint_supports_mcp_handshake(tmp_path):
                     item.text for item in cipher_health.content if hasattr(item, "text")
                 )
                 assert "ready_for_indexing" in cipher_health_text
+
+                simple_health = await session.call_tool(
+                    "synapse_health_simple",
+                    {
+                        "vault_root": {"vault_root": str(vault)},
+                        "db_path": {str(db): None},
+                    },
+                )
+                simple_health_text = "\n".join(
+                    item.text for item in simple_health.content if hasattr(item, "text")
+                )
+                assert "ready_for_indexing" in simple_health_text
 
                 audit = await session.call_tool(
                     "synapse_cipher_audit",

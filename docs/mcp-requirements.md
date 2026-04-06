@@ -83,6 +83,12 @@ The MCP layer should accept:
 - `db_path`
 - optional provider overrides where needed
 
+Path argument rule:
+
+- `vault_root` and `db_path` are plain string paths
+- callers should send `"/abs/path"` directly, not nested objects
+- the MCP layer may normalize obvious local-model wrapper mistakes such as `{ "db_path": { "db_path": "..." } }`
+
 Resolution order:
 
 1. explicit MCP tool arguments
@@ -94,8 +100,11 @@ Resolution order:
 Core retrieval tools:
 
 - `synapse_health`
+- `synapse_health_simple`
 - `synapse_index`
+- `synapse_index_simple`
 - `synapse_search`
+- `synapse_search_simple`
 - `synapse_discover`
 - `synapse_validate`
 
@@ -122,6 +131,8 @@ This keeps MCP aligned with the HTTP/OpenAPI surface while still separating dete
 - whether embedding dimensions match
 - whether the environment is ready for indexing
 
+For local-model runtimes, `synapse_health_simple(vault_root, db_path)` is the preferred fast path because it removes optional overrides from the call shape.
+
 ## Indexing Expectations
 
 `synapse_index` should:
@@ -132,6 +143,8 @@ This keeps MCP aligned with the HTTP/OpenAPI surface while still separating dete
 - create note and chunk embeddings
 - write vectors and metadata to SQLite
 
+For local-model runtimes, `synapse_index_simple(vault_root, db_path)` is the preferred indexing wrapper.
+
 ## Search Expectations
 
 `synapse_search` should:
@@ -139,6 +152,8 @@ This keeps MCP aligned with the HTTP/OpenAPI surface while still separating dete
 - work against an existing Synapse SQLite index
 - support `note`, `chunk`, and `hybrid`
 - return structured ranked results
+
+For local-model runtimes, `synapse_search_simple(query, db_path, mode="hybrid")` is the preferred search wrapper.
 
 ## Discovery Expectations
 
@@ -237,6 +252,7 @@ Notes:
 
 - `SYNAPSE_CONFIG` sets the default runtime config for all MCP tools
 - tools can still override `config_path`, `vault_root`, or `db_path` per call
+- scalar path overrides must be sent as plain strings, not nested objects
 - no reasoning-model environment is required for the core retrieval tools
 - `Cipher` MCP tools do require reasoning-model configuration, for example `OPENAI_BASE_URL`, `OPENAI_API_KEY`, and `SYNAPSE_MODEL`
 - when a `Cipher` MCP tool fails, the tool error message carries a structured Synapse error payload with fields such as `error_type`, `retryable`, `dependency`, and `timeout_seconds`

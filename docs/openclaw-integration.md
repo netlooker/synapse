@@ -204,6 +204,8 @@ Why this shape:
 - `synapse-mcp` is the stable entrypoint
 - `SYNAPSE_CONFIG` sets the default Synapse runtime config and is required at MCP server startup
 - tools can still override `vault_root` and `db_path` per call when needed
+- scalar path overrides must be sent as plain strings like `"/abs/vault"` and `"/abs/synapse.sqlite"`, not nested objects
+- for local-model runtimes, prefer the thin wrappers `synapse_health_simple`, `synapse_index_simple`, and `synapse_search_simple`
 
 ## HTTP API Configuration
 
