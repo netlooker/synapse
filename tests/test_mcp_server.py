@@ -13,6 +13,7 @@ from pydantic_ai.models.test import TestModel
 from synapse.cipher_service import CipherService
 from synapse.errors import SynapseTimeoutError
 from synapse.mcp_server import build_server, resolve_runtime, runtime_requirements, _require_server_config
+from synapse.service_api import IndexResponse, IndexStats, SearchResponse
 
 
 def test_resolve_runtime_honors_overrides(tmp_path):
@@ -76,6 +77,26 @@ def test_health_tool_schema_describes_plain_string_paths():
     assert "plain string filesystem path" in params["db_path"]["description"].lower()
 
 
+def test_index_tool_schema_includes_valid_and_invalid_examples():
+    server = build_server()
+    description = server._tool_manager._tools["synapse_index"].description
+
+    assert "valid arguments" in description.lower()
+    assert "invalid arguments" in description.lower()
+    assert "do not encode multiple parameters inside db_path" in description.lower()
+
+
+def test_search_tool_schema_includes_valid_and_invalid_examples():
+    server = build_server()
+    description = server._tool_manager._tools["synapse_search"].description
+    params = server._tool_manager._tools["synapse_search"].parameters["properties"]
+
+    assert "valid arguments" in description.lower()
+    assert "invalid arguments" in description.lower()
+    assert "top-level string field" in description.lower()
+    assert "top-level field" in params["query"]["description"].lower()
+
+
 def test_health_tool_normalizes_common_nested_path_shapes(tmp_path):
     server = build_server()
     vault = tmp_path / "vault"
@@ -92,6 +113,136 @@ def test_health_tool_normalizes_common_nested_path_shapes(tmp_path):
         )
 
         assert result["vault_root"] == str(vault)
+        assert result["database_path"] == str(db)
+
+    anyio.run(exercise)
+
+
+def test_health_simple_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_path):
+    server = build_server()
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    db = tmp_path / "synapse.sqlite"
+
+    captured: dict[str, str | None] = {}
+
+    def fake_runtime_requirements(
+        config_path: str | None = None,
+        vault_root: str | None = None,
+        db_path: str | None = None,
+        note_provider: str | None = None,
+        chunk_provider: str | None = None,
+    ) -> dict[str, object]:
+        captured["config_path"] = config_path
+        captured["vault_root"] = vault_root
+        captured["db_path"] = db_path
+        return {
+            "config_path": config_path,
+            "vault_root": vault_root,
+            "database_path": db_path,
+            "ready_for_indexing": True,
+        }
+
+    monkeypatch.setattr("synapse.mcp_server.runtime_requirements", fake_runtime_requirements)
+
+    async def exercise() -> None:
+        result = await server._tool_manager._tools["synapse_health_simple"].run(
+            {
+                "db_path": f'{{"{db}"}},vault_root:"{vault}"',
+            }
+        )
+
+        assert result["vault_root"] == str(vault)
+        assert result["database_path"] == str(db)
+        assert captured["vault_root"] == str(vault)
+        assert captured["db_path"] == str(db)
+
+    anyio.run(exercise)
+
+
+def test_index_simple_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_path):
+    server = build_server()
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    db = tmp_path / "synapse.sqlite"
+
+    def fake_index_vault(request):
+        return IndexResponse(
+            vault_root=request.vault_root or "",
+            database_path=request.db_path or "",
+            note_provider="default",
+            chunk_provider="contextual",
+            stats=IndexStats(total_files=5, indexed=5, unchanged=0, errors=0, total_chunks=12),
+        )
+
+    monkeypatch.setattr("synapse.mcp_server.index_vault", fake_index_vault)
+
+    async def exercise() -> None:
+        result = await server._tool_manager._tools["synapse_index_simple"].run(
+            {
+                "db_path": f'{{"{db}"}},vault_root:"{vault}"',
+            }
+        )
+
+        assert result["vault_root"] == str(vault)
+        assert result["database_path"] == str(db)
+
+    anyio.run(exercise)
+
+
+def test_search_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_path):
+    server = build_server()
+    db = tmp_path / "synapse.sqlite"
+
+    def fake_search_index(request):
+        return SearchResponse(
+            query=request.query,
+            mode=request.mode,
+            database_path=request.db_path or "",
+            results=[],
+        )
+
+    monkeypatch.setattr("synapse.mcp_server.search_index", fake_search_index)
+
+    async def exercise() -> None:
+        result = await server._tool_manager._tools["synapse_search"].run(
+            {
+                "db_path": f'{{"{db}"}},mode:"hybrid",query:"cross-paper insights about AI and computer science"',
+            }
+        )
+
+        assert result["query"] == "cross-paper insights about AI and computer science"
+        assert result["mode"] == "hybrid"
+        assert result["database_path"] == str(db)
+
+    anyio.run(exercise)
+
+
+def test_search_simple_tool_normalizes_nested_mode_objects(monkeypatch, tmp_path):
+    server = build_server()
+    db = tmp_path / "synapse.sqlite"
+
+    def fake_search_index(request):
+        return SearchResponse(
+            query=request.query,
+            mode=request.mode,
+            database_path=request.db_path or "",
+            results=[],
+        )
+
+    monkeypatch.setattr("synapse.mcp_server.search_index", fake_search_index)
+
+    async def exercise() -> None:
+        result = await server._tool_manager._tools["synapse_search_simple"].run(
+            {
+                "query": "signal",
+                "db_path": str(db),
+                "mode": {"mode": {"mode": 2}},
+            }
+        )
+
+        assert result["query"] == "signal"
+        assert result["mode"] == "hybrid"
         assert result["database_path"] == str(db)
 
     anyio.run(exercise)

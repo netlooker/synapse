@@ -88,6 +88,42 @@ Path argument rule:
 - `vault_root` and `db_path` are plain string paths
 - callers should send `"/abs/path"` directly, not nested objects
 - the MCP layer may normalize obvious local-model wrapper mistakes such as `{ "db_path": { "db_path": "..." } }`
+- the MCP layer may also recover common collapsed-string mistakes where safe, for example a `db_path` blob that wrongly contains `vault_root`, `query`, or `mode`
+
+Valid indexing call:
+
+```json
+{
+  "vault_root": "/data/workspace/e2e/test/ingestion_vault",
+  "db_path": "/data/workspace/e2e/test/synapse.sqlite"
+}
+```
+
+Invalid indexing call:
+
+```json
+{
+  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},vault_root:\"/data/workspace/e2e/test/ingestion_vault\""
+}
+```
+
+Valid search call:
+
+```json
+{
+  "query": "cross-paper insights about AI and computer science",
+  "mode": "hybrid",
+  "db_path": "/data/workspace/e2e/test/synapse.sqlite"
+}
+```
+
+Invalid search call:
+
+```json
+{
+  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},mode:\"hybrid\",query:\"cross-paper insights about AI and computer science\""
+}
+```
 
 Resolution order:
 

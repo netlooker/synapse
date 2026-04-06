@@ -207,6 +207,45 @@ Why this shape:
 - scalar path overrides must be sent as plain strings like `"/abs/vault"` and `"/abs/synapse.sqlite"`, not nested objects
 - for local-model runtimes, prefer the thin wrappers `synapse_health_simple`, `synapse_index_simple`, and `synapse_search_simple`
 
+Tool payload examples:
+
+Valid `synapse_index`:
+
+```json
+{
+  "vault_root": "/data/workspace/e2e/test/ingestion_vault",
+  "db_path": "/data/workspace/e2e/test/synapse.sqlite"
+}
+```
+
+Invalid `synapse_index`:
+
+```json
+{
+  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},vault_root:\"/data/workspace/e2e/test/ingestion_vault\""
+}
+```
+
+Valid `synapse_search`:
+
+```json
+{
+  "query": "cross-paper insights about AI and computer science",
+  "mode": "hybrid",
+  "db_path": "/data/workspace/e2e/test/synapse.sqlite"
+}
+```
+
+Invalid `synapse_search`:
+
+```json
+{
+  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},mode:\"hybrid\",query:\"cross-paper insights about AI and computer science\""
+}
+```
+
+Synapse now defensively recovers the common collapsed `db_path` blob cases above when it can do so unambiguously, but callers should still send the valid flat shape.
+
 ## HTTP API Configuration
 
 For web-facing integrations, run the API server directly:

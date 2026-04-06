@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -37,14 +39,55 @@ from .settings import load_settings
 
 PLAIN_PATH_DESCRIPTION = (
     "Plain string filesystem path. Example: '/abs/path/to/file'. "
-    "Do not wrap the value in a nested object."
+    "Do not wrap the value in a nested object or encode other arguments inside it. "
+    'Invalid example: \'{"\\/abs/path/to/file"},query:"signal"\''
 )
 OPTIONAL_PLAIN_PATH_DESCRIPTION = (
     "Optional plain string filesystem path override. "
-    "Do not wrap the value in nested objects."
+    "Do not wrap the value in nested objects or encode other arguments inside it."
 )
-PLAIN_QUERY_DESCRIPTION = "Plain string search query."
-SEARCH_MODE_DESCRIPTION = "Search mode. Use one of: note, chunk, hybrid."
+PLAIN_QUERY_DESCRIPTION = (
+    "Plain string search query as a top-level field. "
+    'Valid example: {"query": "cross-paper insights"}. '
+    'Invalid example: {"db_path": "{\\"/abs/synapse.sqlite\\"},query:\\"cross-paper insights\\"}"}.'
+)
+SEARCH_MODE_DESCRIPTION = (
+    "Search mode as a top-level string. Use one of: note, chunk, hybrid. "
+    'Valid example: {"mode": "hybrid"}. '
+    'Invalid example: encoding mode inside db_path or passing nested mode objects.'
+)
+INDEX_TOOL_DESCRIPTION = (
+    "Index a markdown folder into Synapse. "
+    "vault_root must be a plain string path. db_path must be a plain string path. "
+    "Do not encode multiple parameters inside db_path. "
+    'Valid arguments: {"vault_root": "/abs/vault", "db_path": "/abs/synapse.sqlite"}. '
+    'Invalid arguments: {"db_path": "{\\"/abs/synapse.sqlite\\"},vault_root:\\"/abs/vault\\"}"}.'
+)
+INDEX_SIMPLE_TOOL_DESCRIPTION = (
+    "Minimal indexing call for local-model agents. "
+    "Call with only plain string vault_root and db_path arguments. "
+    'Valid arguments: {"vault_root": "/abs/vault", "db_path": "/abs/synapse.sqlite"}.'
+)
+SEARCH_TOOL_DESCRIPTION = (
+    "Search an indexed Synapse database. "
+    "query must be a top-level string field. mode must be a top-level string field. "
+    "db_path must be a plain string path. Do not encode multiple parameters inside db_path. "
+    'Valid arguments: {"query": "cross-paper insights", "mode": "hybrid", "db_path": "/abs/synapse.sqlite"}. '
+    'Invalid arguments: {"db_path": "{\\"/abs/synapse.sqlite\\"},mode:\\"hybrid\\",query:\\"cross-paper insights\\"}"}.'
+)
+SEARCH_SIMPLE_TOOL_DESCRIPTION = (
+    "Minimal search call for local-model agents. "
+    "Call with top-level query plus plain string db_path. mode defaults to hybrid."
+)
+_COLLAPSED_ARG_KEYS = ("config_path", "vault_root", "db_path", "query", "mode")
+_COLLAPSED_ARG_PATTERN = re.compile(
+    r"(?:^|,)\s*"
+    r"(?P<key>config_path|vault_root|db_path|query|mode)"
+    r"\s*:\s*"
+    r"(?P<value>.*?)(?=(?:,\s*(?:config_path|vault_root|db_path|query|mode)\s*:)|\s*$)",
+    re.DOTALL,
+)
+_PATH_TOKEN_PATTERN = re.compile(r"(?P<path>(?:/|~/)[^\",}\s]+)")
 
 
 def _coerce_path_arg(value: Any, info: ValidationInfo) -> Any:
@@ -70,6 +113,120 @@ def _coerce_path_arg(value: Any, info: ValidationInfo) -> Any:
     )
 
 
+def _coerce_mode_arg(value: Any) -> Any:
+    normalized = _normalize_mode_value(value)
+    if isinstance(normalized, str):
+        return normalized
+    return value
+
+
+def _normalize_mode_value(value: Any) -> Any:
+    while isinstance(value, dict) and set(value) == {"mode"}:
+        value = value["mode"]
+    if isinstance(value, str):
+        stripped = value.strip().strip('"').lower()
+        if stripped in {"note", "chunk", "hybrid"}:
+            return stripped
+        if stripped in {"0", "1", "2"}:
+            return {0: "note", 1: "chunk", 2: "hybrid"}[int(stripped)]
+    if isinstance(value, int):
+        return {0: "note", 1: "chunk", 2: "hybrid"}.get(value, value)
+    return value
+
+
+def _normalize_tool_arguments(data: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(data)
+    recovered: dict[str, Any] = {}
+    for source_field in ("config_path", "vault_root", "db_path"):
+        recovered.update(_extract_collapsed_arguments(source_field, normalized.get(source_field)))
+
+    for key, value in recovered.items():
+        current = normalized.get(key)
+        if key in {"config_path", "vault_root", "db_path"}:
+            if current is None or _looks_like_collapsed_argument_blob(current):
+                normalized[key] = value
+            continue
+        if current is None:
+            normalized[key] = value
+
+    if "mode" in normalized:
+        normalized["mode"] = _coerce_mode_arg(normalized["mode"])
+
+    return normalized
+
+
+def _extract_collapsed_arguments(source_field: str, value: Any) -> dict[str, Any]:
+    if not _looks_like_collapsed_argument_blob(value):
+        return {}
+
+    text = str(value).strip()
+    extracted: dict[str, Any] = {}
+    path_match = _PATH_TOKEN_PATTERN.search(text)
+    if path_match:
+        extracted[source_field] = path_match.group("path")
+
+    for match in _COLLAPSED_ARG_PATTERN.finditer(text):
+        key = match.group("key")
+        parsed = _parse_collapsed_value(match.group("value"))
+        if parsed is None:
+            continue
+        if key == "mode":
+            parsed = _coerce_mode_arg(parsed)
+        extracted[key] = parsed
+    return extracted
+
+
+def _looks_like_collapsed_argument_blob(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    return any(f"{key}:" in value for key in _COLLAPSED_ARG_KEYS) or (
+        value.strip().startswith("{") and "," in value and "/" in value
+    )
+
+
+def _parse_collapsed_value(raw: str) -> Any:
+    token = _trim_unbalanced_suffix(raw.strip().rstrip(","))
+    if not token:
+        return None
+    if token.startswith("{") and token.endswith("}"):
+        try:
+            return json.loads(token)
+        except json.JSONDecodeError:
+            pass
+    if token.startswith('"') and token.endswith('"'):
+        try:
+            return json.loads(token)
+        except json.JSONDecodeError:
+            return token[1:-1].replace('\\"', '"')
+    lowered = token.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if re.fullmatch(r"-?\d+", token):
+        return int(token)
+    if re.fullmatch(r"-?\d+\.\d+", token):
+        return float(token)
+    return token
+
+
+def _trim_unbalanced_suffix(token: str) -> str:
+    trimmed = token
+    while trimmed.endswith("}") and trimmed.count("{") < trimmed.count("}"):
+        trimmed = trimmed[:-1].rstrip()
+    return trimmed
+
+
+def _install_argument_normalizer(mcp: FastMCP, tool_name: str) -> None:
+    tool = mcp._tool_manager._tools[tool_name]
+    original_pre_parse_json = tool.fn_metadata.pre_parse_json
+    object.__setattr__(
+        tool.fn_metadata,
+        "pre_parse_json",
+        lambda data, _orig=original_pre_parse_json: _normalize_tool_arguments(_orig(data)),
+    )
+
+
 OptionalPlainPathArg = Annotated[
     str | None,
     BeforeValidator(_coerce_path_arg),
@@ -83,6 +240,7 @@ RequiredPlainPathArg = Annotated[
 QueryArg = Annotated[str, Field(description=PLAIN_QUERY_DESCRIPTION)]
 SearchModeArg = Annotated[
     Literal["note", "chunk", "hybrid"],
+    BeforeValidator(_coerce_mode_arg),
     Field(description=SEARCH_MODE_DESCRIPTION),
 ]
 
@@ -122,7 +280,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         name="synapse_health",
         description=(
             "Report Synapse runtime requirements and readiness. "
-            "Path overrides must be plain string paths, not nested objects."
+            "Path overrides must be plain string paths, not nested objects or collapsed multi-field strings."
         ),
     )
     def synapse_health(
@@ -160,7 +318,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         name="synapse_cipher_health",
         description=(
             "Report Cipher runtime requirements and readiness. "
-            "Path overrides must be plain string paths, not nested objects."
+            "Path overrides must be plain string paths, not nested objects or collapsed multi-field strings."
         ),
     )
     def synapse_cipher_health(
@@ -180,10 +338,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
 
     @mcp.tool(
         name="synapse_index",
-        description=(
-            "Index a markdown folder into Synapse. "
-            "Path overrides must be plain string paths, not nested objects."
-        ),
+        description=INDEX_TOOL_DESCRIPTION,
     )
     def synapse_index(
         config_path: OptionalPlainPathArg = None,
@@ -204,10 +359,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
 
     @mcp.tool(
         name="synapse_index_simple",
-        description=(
-            "Minimal indexing call for local-model agents. "
-            "Call with only plain string vault_root and db_path arguments."
-        ),
+        description=INDEX_SIMPLE_TOOL_DESCRIPTION,
     )
     def synapse_index_simple(
         vault_root: RequiredPlainPathArg,
@@ -222,10 +374,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
 
     @mcp.tool(
         name="synapse_search",
-        description=(
-            "Search an indexed Synapse database. "
-            "db_path must be a plain string path, not a nested object."
-        ),
+        description=SEARCH_TOOL_DESCRIPTION,
     )
     def synapse_search(
         query: QueryArg,
@@ -250,10 +399,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
 
     @mcp.tool(
         name="synapse_search_simple",
-        description=(
-            "Minimal search call for local-model agents. "
-            "Call with query plus plain string db_path. mode defaults to hybrid."
-        ),
+        description=SEARCH_SIMPLE_TOOL_DESCRIPTION,
     )
     def synapse_search_simple(
         query: QueryArg,
@@ -272,7 +418,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         name="synapse_discover",
         description=(
             "Discover hidden links in an indexed Synapse database. "
-            "db_path must be a plain string path, not a nested object."
+            "db_path must be a plain string path, not a nested object or collapsed multi-field string."
         ),
     )
     def synapse_discover(
@@ -296,7 +442,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         name="synapse_validate",
         description=(
             "Report broken markdown wikilinks from an indexed Synapse database. "
-            "db_path must be a plain string path, not a nested object."
+            "db_path must be a plain string path, not a nested object or collapsed multi-field string."
         ),
     )
     def synapse_validate(
@@ -379,6 +525,19 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
             CipherDeps(vault_root=Path("."), synapse_db=Path(".")),
             config_path=config_path,
         )
+
+    for tool_name in (
+        "synapse_health",
+        "synapse_health_simple",
+        "synapse_cipher_health",
+        "synapse_index",
+        "synapse_index_simple",
+        "synapse_search",
+        "synapse_search_simple",
+        "synapse_discover",
+        "synapse_validate",
+    ):
+        _install_argument_normalizer(mcp, tool_name)
 
     return mcp
 
