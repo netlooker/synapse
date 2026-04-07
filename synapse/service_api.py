@@ -111,6 +111,24 @@ class SearchResponse(BaseModel):
     results: list[SearchResult] = Field(default_factory=list)
 
 
+WorkspaceHandle = Literal["current"]
+
+
+class WorkspaceHealthRequest(BaseModel):
+    workspace: WorkspaceHandle = "current"
+
+
+class WorkspaceIndexRequest(BaseModel):
+    workspace: WorkspaceHandle = "current"
+
+
+class WorkspaceSearchRequest(BaseModel):
+    query: str
+    workspace: WorkspaceHandle = "current"
+    mode: Literal["note", "chunk", "hybrid"] = "hybrid"
+    limit: int | None = None
+
+
 class DiscoverRequest(BaseModel):
     config_path: str | None = None
     db_path: str | None = None
@@ -328,6 +346,27 @@ def validate_index(request: ValidateRequest) -> ValidateResponse:
     )
 
 
+def runtime_requirements_for_workspace(request: WorkspaceHealthRequest) -> HealthResponse:
+    _assert_workspace_handle(request.workspace)
+    return runtime_requirements(HealthRequest())
+
+
+def index_vault_for_workspace(request: WorkspaceIndexRequest) -> IndexResponse:
+    _assert_workspace_handle(request.workspace)
+    return index_vault(IndexRequest())
+
+
+def search_index_for_workspace(request: WorkspaceSearchRequest) -> SearchResponse:
+    _assert_workspace_handle(request.workspace)
+    return search_index(
+        SearchRequest(
+            query=request.query,
+            mode=request.mode,
+            limit=request.limit,
+        )
+    )
+
+
 def _provider_summary(provider: ProviderSettings) -> ProviderSummary:
     return ProviderSummary(
         name=provider.name,
@@ -347,6 +386,13 @@ def _assert_matching_dimensions(note_cfg: ProviderSettings, chunk_cfg: ProviderS
     if note_cfg.dimensions != chunk_cfg.dimensions:
         raise SynapseBadRequestError(
             f"Note provider dimension {note_cfg.dimensions} must match chunk provider dimension {chunk_cfg.dimensions}"
+        )
+
+
+def _assert_workspace_handle(workspace: WorkspaceHandle) -> None:
+    if workspace != "current":
+        raise SynapseBadRequestError(
+            f"Unsupported workspace handle: {workspace}. Use workspace='current'."
         )
 
 

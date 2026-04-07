@@ -12,8 +12,14 @@ from pydantic_ai.models.test import TestModel
 
 from synapse.cipher_service import CipherService
 from synapse.errors import SynapseTimeoutError
-from synapse.mcp_server import build_server, resolve_runtime, runtime_requirements, _require_server_config
-from synapse.service_api import IndexResponse, IndexStats, SearchResponse
+from synapse.mcp_server import (
+    _require_server_config,
+    build_server,
+    resolve_runtime,
+    runtime_requirements,
+    runtime_requirements_for_workspace,
+)
+from synapse.service_api import HealthResponse, IndexResponse, IndexStats, SearchResponse
 
 
 def test_resolve_runtime_honors_overrides(tmp_path):
@@ -59,9 +65,12 @@ def test_build_server_returns_fastmcp_instance():
     tool_names = set(server._tool_manager._tools.keys())
     assert "synapse_health" in tool_names
     assert "synapse_health_simple" in tool_names
+    assert "synapse_health_for_workspace" in tool_names
     assert "synapse_cipher_health" in tool_names
     assert "synapse_index_simple" in tool_names
+    assert "synapse_index_for_workspace" in tool_names
     assert "synapse_search_simple" in tool_names
+    assert "synapse_search_for_workspace" in tool_names
     assert "synapse_cipher_audit" in tool_names
     assert "synapse_cipher_explain" in tool_names
     assert "synapse_cipher_chunking_strategy" in tool_names
@@ -95,6 +104,17 @@ def test_search_tool_schema_includes_valid_and_invalid_examples():
     assert "invalid arguments" in description.lower()
     assert "top-level string field" in description.lower()
     assert "top-level field" in params["query"]["description"].lower()
+
+
+def test_workspace_health_tool_schema_describes_current_handle():
+    server = build_server()
+    params = server._tool_manager._tools["synapse_health_for_workspace"].parameters["properties"]
+
+    assert "configured synapse workspace" in (
+        server._tool_manager._tools["synapse_health_for_workspace"].description.lower()
+    )
+    assert "workspace" in params
+    assert "do not pass filesystem paths" in params["workspace"]["description"].lower()
 
 
 def test_health_tool_normalizes_common_nested_path_shapes(tmp_path):
@@ -160,6 +180,55 @@ def test_health_simple_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_p
     anyio.run(exercise)
 
 
+def test_workspace_health_tool_uses_configured_runtime(monkeypatch):
+    captured = {}
+
+    def fake_runtime_requirements_for_workspace(request):
+        captured["workspace"] = request.workspace
+        return HealthResponse(
+            vault_root="/tmp/vault",
+            vault_exists=True,
+            database_path="/tmp/synapse.sqlite",
+            database_exists=True,
+            vector_store="sqlite-vec",
+            sqlite_vec_python_package=True,
+            note_provider={
+                "name": "default",
+                "type": "ollama",
+                "model": "nomic-embed-text:v1.5",
+                "base_url": "http://127.0.0.1:11434",
+                "dimensions": 768,
+                "context_strategy": "full",
+            },
+            chunk_provider={
+                "name": "contextual",
+                "type": "ollama",
+                "model": "nomic-embed-text:v1.5",
+                "base_url": "http://127.0.0.1:11434",
+                "dimensions": 768,
+                "context_strategy": "full",
+            },
+            dimensions_match=True,
+            requirements={
+                "sqlite_vec": True,
+                "markdown_folder": True,
+                "writable_database_parent": True,
+                "embedding_models_configured": True,
+            },
+            ready_for_indexing=True,
+        )
+
+    monkeypatch.setattr(
+        "synapse.mcp_server.service_runtime_requirements_for_workspace",
+        fake_runtime_requirements_for_workspace,
+    )
+
+    result = runtime_requirements_for_workspace()
+
+    assert captured["workspace"] == "current"
+    assert result["database_path"] == "/tmp/synapse.sqlite"
+
+
 def test_index_simple_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_path):
     server = build_server()
     vault = tmp_path / "vault"
@@ -186,6 +255,31 @@ def test_index_simple_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_pa
 
         assert result["vault_root"] == str(vault)
         assert result["database_path"] == str(db)
+
+    anyio.run(exercise)
+
+
+def test_index_for_workspace_tool_uses_current_handle(monkeypatch):
+    server = build_server()
+    captured = {}
+
+    def fake_index_vault_for_workspace(request):
+        captured["workspace"] = request.workspace
+        return IndexResponse(
+            vault_root="/tmp/vault",
+            database_path="/tmp/synapse.sqlite",
+            note_provider="default",
+            chunk_provider="contextual",
+            stats=IndexStats(total_files=5, indexed=5, unchanged=0, errors=0, total_chunks=12),
+        )
+
+    monkeypatch.setattr("synapse.mcp_server.index_vault_for_workspace", fake_index_vault_for_workspace)
+
+    async def exercise() -> None:
+        result = await server._tool_manager._tools["synapse_index_for_workspace"].run({})
+
+        assert captured["workspace"] == "current"
+        assert result["database_path"] == "/tmp/synapse.sqlite"
 
     anyio.run(exercise)
 
@@ -248,6 +342,38 @@ def test_search_simple_tool_normalizes_nested_mode_objects(monkeypatch, tmp_path
     anyio.run(exercise)
 
 
+def test_search_for_workspace_tool_uses_current_handle(monkeypatch):
+    server = build_server()
+    captured = {}
+
+    def fake_search_index_for_workspace(request):
+        captured["workspace"] = request.workspace
+        return SearchResponse(
+            query=request.query,
+            mode=request.mode,
+            database_path="/tmp/synapse.sqlite",
+            results=[],
+        )
+
+    monkeypatch.setattr("synapse.mcp_server.search_index_for_workspace", fake_search_index_for_workspace)
+
+    async def exercise() -> None:
+        result = await server._tool_manager._tools["synapse_search_for_workspace"].run(
+            {
+                "query": "signal",
+                "workspace": {"workspace": "current"},
+                "mode": {"mode": {"mode": 2}},
+            }
+        )
+
+        assert captured["workspace"] == "current"
+        assert result["query"] == "signal"
+        assert result["mode"] == "hybrid"
+        assert result["database_path"] == "/tmp/synapse.sqlite"
+
+    anyio.run(exercise)
+
+
 def test_health_tool_rejects_unrepairable_nested_path_shapes():
     server = build_server()
 
@@ -306,9 +432,12 @@ def test_module_entrypoint_supports_mcp_handshake(tmp_path):
                 tool_names = {tool.name for tool in tools.tools}
                 assert "synapse_health" in tool_names
                 assert "synapse_health_simple" in tool_names
+                assert "synapse_health_for_workspace" in tool_names
                 assert "synapse_cipher_health" in tool_names
                 assert "synapse_index_simple" in tool_names
+                assert "synapse_index_for_workspace" in tool_names
                 assert "synapse_search_simple" in tool_names
+                assert "synapse_search_for_workspace" in tool_names
 
                 health = await session.call_tool(
                     "synapse_health",

@@ -131,16 +131,40 @@ Resolution order:
 2. Synapse config
 3. Synapse defaults
 
+## Canonical Vs Pathless MCP Surfaces
+
+Synapse should keep two retrieval-facing MCP layers:
+
+- canonical typed tools that accept explicit path overrides
+- a pathless local-model facade that resolves the configured workspace server-side
+
+The canonical tools remain the precise integration surface for capable agents, direct MCP clients, and scripts that need explicit path control.
+
+The pathless facade exists because weaker local models have repeatedly corrupted raw path-bearing string arguments before Synapse can execute the tool.
+
+Initial workspace handle:
+
+- `workspace="current"`
+
+`current` means:
+
+- use the Synapse workspace already configured for this MCP server
+- resolve `vault_root` and `db_path` from Synapse config server-side
+- keep model-authored fields limited to semantic inputs such as `query` and `mode`
+
 ## Initial MCP Tool Surface
 
 Core retrieval tools:
 
 - `synapse_health`
 - `synapse_health_simple`
+- `synapse_health_for_workspace`
 - `synapse_index`
 - `synapse_index_simple`
+- `synapse_index_for_workspace`
 - `synapse_search`
 - `synapse_search_simple`
+- `synapse_search_for_workspace`
 - `synapse_discover`
 - `synapse_validate`
 
@@ -169,6 +193,8 @@ This keeps MCP aligned with the HTTP/OpenAPI surface while still separating dete
 
 For local-model runtimes, `synapse_health_simple(vault_root, db_path)` is the preferred fast path because it removes optional overrides from the call shape.
 
+When raw path fields are fragile in the agent runtime, `synapse_health_for_workspace(workspace="current")` is the preferred pathless health probe.
+
 ## Indexing Expectations
 
 `synapse_index` should:
@@ -181,6 +207,8 @@ For local-model runtimes, `synapse_health_simple(vault_root, db_path)` is the pr
 
 For local-model runtimes, `synapse_index_simple(vault_root, db_path)` is the preferred indexing wrapper.
 
+When raw path fields are fragile in the agent runtime, `synapse_index_for_workspace(workspace="current")` is the preferred pathless indexing wrapper.
+
 ## Search Expectations
 
 `synapse_search` should:
@@ -190,6 +218,8 @@ For local-model runtimes, `synapse_index_simple(vault_root, db_path)` is the pre
 - return structured ranked results
 
 For local-model runtimes, `synapse_search_simple(query, db_path, mode="hybrid")` is the preferred search wrapper.
+
+When raw path fields are fragile in the agent runtime, `synapse_search_for_workspace(query, workspace="current", mode="hybrid")` is the preferred pathless search wrapper.
 
 ## Discovery Expectations
 

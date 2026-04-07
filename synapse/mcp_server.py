@@ -27,10 +27,15 @@ from .service_api import (
     IndexRequest,
     SearchRequest,
     ValidateRequest,
+    WorkspaceIndexRequest,
+    WorkspaceSearchRequest,
     discover_index,
+    index_vault_for_workspace,
     index_vault,
     resolve_runtime,
     runtime_requirements as service_runtime_requirements,
+    runtime_requirements_for_workspace as service_runtime_requirements_for_workspace,
+    search_index_for_workspace,
     search_index,
     validate_index,
 )
@@ -79,6 +84,22 @@ SEARCH_SIMPLE_TOOL_DESCRIPTION = (
     "Minimal search call for local-model agents. "
     "Call with top-level query plus plain string db_path. mode defaults to hybrid."
 )
+WORKSPACE_HANDLE_DESCRIPTION = (
+    "Stable Synapse workspace handle. Use 'current' to target the workspace configured for this server. "
+    "Do not pass filesystem paths here."
+)
+WORKSPACE_HEALTH_TOOL_DESCRIPTION = (
+    "Pathless health check for local-model agents. "
+    "Use workspace='current' or omit the argument to inspect the configured Synapse workspace."
+)
+WORKSPACE_INDEX_TOOL_DESCRIPTION = (
+    "Pathless indexing call for local-model agents. "
+    "Use workspace='current' or omit the argument to index the configured Synapse workspace."
+)
+WORKSPACE_SEARCH_TOOL_DESCRIPTION = (
+    "Pathless search call for local-model agents. "
+    "Provide query and optional mode. Use workspace='current' or omit it to search the configured Synapse database."
+)
 _COLLAPSED_ARG_KEYS = ("config_path", "vault_root", "db_path", "query", "mode")
 _COLLAPSED_ARG_PATTERN = re.compile(
     r"(?:^|,)\s*"
@@ -117,6 +138,23 @@ def _coerce_mode_arg(value: Any) -> Any:
     normalized = _normalize_mode_value(value)
     if isinstance(normalized, str):
         return normalized
+    return value
+
+
+def _coerce_workspace_arg(value: Any, info: ValidationInfo) -> Any:
+    if value is None or isinstance(value, str):
+        return value
+    if not isinstance(value, dict):
+        return value
+
+    field_name = info.field_name or "workspace"
+    nested_value = value.get(field_name)
+    if isinstance(nested_value, str):
+        return nested_value
+    if len(value) == 1:
+        key, nested = next(iter(value.items()))
+        if isinstance(key, str) and nested is None:
+            return key
     return value
 
 
@@ -243,6 +281,11 @@ SearchModeArg = Annotated[
     BeforeValidator(_coerce_mode_arg),
     Field(description=SEARCH_MODE_DESCRIPTION),
 ]
+WorkspaceArg = Annotated[
+    Literal["current"],
+    BeforeValidator(_coerce_workspace_arg),
+    Field(description=WORKSPACE_HANDLE_DESCRIPTION),
+]
 
 
 def runtime_requirements(
@@ -260,6 +303,16 @@ def runtime_requirements(
             note_provider=note_provider,
             chunk_provider=chunk_provider,
         )
+    ).model_dump()
+
+
+def runtime_requirements_for_workspace(
+    workspace: Literal["current"] = "current",
+) -> dict[str, Any]:
+    from .service_api import WorkspaceHealthRequest
+
+    return service_runtime_requirements_for_workspace(
+        WorkspaceHealthRequest(workspace=workspace)
     ).model_dump()
 
 
@@ -313,6 +366,15 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
             vault_root=vault_root,
             db_path=db_path,
         )
+
+    @mcp.tool(
+        name="synapse_health_for_workspace",
+        description=WORKSPACE_HEALTH_TOOL_DESCRIPTION,
+    )
+    def synapse_health_for_workspace(
+        workspace: WorkspaceArg = "current",
+    ) -> dict[str, Any]:
+        return runtime_requirements_for_workspace(workspace=workspace)
 
     @mcp.tool(
         name="synapse_cipher_health",
@@ -373,6 +435,17 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         ).model_dump()
 
     @mcp.tool(
+        name="synapse_index_for_workspace",
+        description=WORKSPACE_INDEX_TOOL_DESCRIPTION,
+    )
+    def synapse_index_for_workspace_tool(
+        workspace: WorkspaceArg = "current",
+    ) -> dict[str, Any]:
+        return index_vault_for_workspace(
+            WorkspaceIndexRequest(workspace=workspace)
+        ).model_dump()
+
+    @mcp.tool(
         name="synapse_search",
         description=SEARCH_TOOL_DESCRIPTION,
     )
@@ -411,6 +484,25 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
                 query=query,
                 db_path=db_path,
                 mode=mode,
+            )
+        ).model_dump()
+
+    @mcp.tool(
+        name="synapse_search_for_workspace",
+        description=WORKSPACE_SEARCH_TOOL_DESCRIPTION,
+    )
+    def synapse_search_for_workspace_tool(
+        query: QueryArg,
+        workspace: WorkspaceArg = "current",
+        mode: SearchModeArg = "hybrid",
+        limit: int | None = None,
+    ) -> dict[str, Any]:
+        return search_index_for_workspace(
+            WorkspaceSearchRequest(
+                query=query,
+                workspace=workspace,
+                mode=mode,
+                limit=limit,
             )
         ).model_dump()
 
@@ -532,10 +624,13 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         "synapse_cipher_health",
         "synapse_index",
         "synapse_index_simple",
+        "synapse_index_for_workspace",
         "synapse_search",
         "synapse_search_simple",
+        "synapse_search_for_workspace",
         "synapse_discover",
         "synapse_validate",
+        "synapse_health_for_workspace",
     ):
         _install_argument_normalizer(mcp, tool_name)
 

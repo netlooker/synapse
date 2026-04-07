@@ -205,7 +205,7 @@ Why this shape:
 - `SYNAPSE_CONFIG` sets the default Synapse runtime config and is required at MCP server startup
 - tools can still override `vault_root` and `db_path` per call when needed
 - scalar path overrides must be sent as plain strings like `"/abs/vault"` and `"/abs/synapse.sqlite"`, not nested objects
-- for local-model runtimes, prefer the thin wrappers `synapse_health_simple`, `synapse_index_simple`, and `synapse_search_simple`
+- for local-model runtimes, prefer the pathless workspace wrappers `synapse_health_for_workspace`, `synapse_index_for_workspace`, and `synapse_search_for_workspace`; keep `*_simple` for callers that still need explicit path control
 
 Tool payload examples:
 
