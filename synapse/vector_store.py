@@ -44,6 +44,57 @@ class VectorStore(Protocol):
     ) -> list[dict[str, Any]]: ...
     def delete_chunks(self, doc_id: int) -> int: ...
     def get_chunks(self, doc_id: int, scope: str | None = None) -> list[dict[str, Any]]: ...
+    def upsert_bundle(
+        self,
+        bundle_id: str,
+        content_hash: str,
+        artifact_path: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        artifact: dict[str, Any] | None = None,
+        *,
+        commit: bool = True,
+    ) -> int: ...
+    def get_bundle(self, bundle_id: str) -> dict[str, Any] | None: ...
+    def delete_bundle(self, bundle_id: str, *, commit: bool = True) -> int: ...
+    def insert_source(
+        self,
+        bundle_row_id: int,
+        source_id: str,
+        *,
+        origin_url: str | None = None,
+        direct_paper_url: str | None = None,
+        title: str | None = None,
+        authors: list[str] | None = None,
+        published: str | None = None,
+        source_type: str | None = None,
+        retrieved_at: str | None = None,
+        extraction_status: str | None = None,
+        extraction_method: str | None = None,
+        summary_text: str | None = None,
+        abstract_text: str | None = None,
+        full_text: str | None = None,
+        full_text_path: str | None = None,
+        note_path: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        artifact: dict[str, Any] | None = None,
+        commit: bool = True,
+    ) -> int: ...
+    def get_source(self, bundle_id: str, source_id: str) -> dict[str, Any] | None: ...
+    def insert_segment(
+        self,
+        *,
+        owner_kind: str,
+        owner_id: int,
+        content_role: str,
+        segment_index: int,
+        text: str,
+        embedding: list[float] | None,
+        source_row_id: int | None = None,
+        note_row_id: int | None = None,
+        metadata: dict[str, Any] | None = None,
+        commit: bool = True,
+    ) -> int: ...
+    def get_source_segments(self, source_row_id: int) -> list[dict[str, Any]]: ...
 
 
 class SQLiteVecStore:
@@ -113,6 +164,43 @@ class SQLiteVecStore:
 
     def get_chunks(self, doc_id: int, scope: str | None = None) -> list[dict[str, Any]]:
         return self.backend.get_chunks(doc_id, scope)
+
+    def upsert_bundle(
+        self,
+        bundle_id: str,
+        content_hash: str,
+        artifact_path: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        artifact: dict[str, Any] | None = None,
+        *,
+        commit: bool = True,
+    ) -> int:
+        return self.backend.upsert_bundle(
+            bundle_id,
+            content_hash,
+            artifact_path=artifact_path,
+            metadata=metadata,
+            artifact=artifact,
+            commit=commit,
+        )
+
+    def get_bundle(self, bundle_id: str) -> dict[str, Any] | None:
+        return self.backend.get_bundle(bundle_id)
+
+    def delete_bundle(self, bundle_id: str, *, commit: bool = True) -> int:
+        return self.backend.delete_bundle(bundle_id, commit=commit)
+
+    def insert_source(self, bundle_row_id: int, source_id: str, **kwargs: Any) -> int:
+        return self.backend.insert_source(bundle_row_id, source_id, **kwargs)
+
+    def get_source(self, bundle_id: str, source_id: str) -> dict[str, Any] | None:
+        return self.backend.get_source(bundle_id, source_id)
+
+    def insert_segment(self, **kwargs: Any) -> int:
+        return self.backend.insert_segment(**kwargs)
+
+    def get_source_segments(self, source_row_id: int) -> list[dict[str, Any]]:
+        return self.backend.get_source_segments(source_row_id)
 
 
 def create_vector_store(

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from .discovery import Discovery, find_discoveries
 from .embeddings import EmbeddingClient
 from .errors import SynapseBadRequestError, SynapseNotFoundError
+from .research_ingest import ResearchBundleIngestor
 from .index import Indexer
 from .search import Searcher
 from .settings import AppSettings, ProviderSettings, load_settings
@@ -82,6 +83,23 @@ class IndexResponse(BaseModel):
     note_provider: str
     chunk_provider: str
     stats: IndexStats
+
+
+class IngestBundleRequest(BaseModel):
+    bundle_path: str
+    config_path: str | None = None
+    db_path: str | None = None
+    provider: str | None = None
+
+
+class IngestBundleResponse(BaseModel):
+    bundle_id: str
+    bundle_path: str
+    database_path: str
+    provider: str
+    replaced_existing: bool
+    source_count: int
+    segment_count: int
 
 
 class SearchRequest(BaseModel):
@@ -259,6 +277,36 @@ def index_vault(request: IndexRequest) -> IndexResponse:
         note_provider=note_cfg.name,
         chunk_provider=chunk_cfg.name,
         stats=IndexStats(**stats),
+    )
+
+
+def ingest_bundle_artifact(request: IngestBundleRequest) -> IngestBundleResponse:
+    settings, _, db = resolve_runtime(request.config_path, None, request.db_path)
+    provider = settings.embedding_provider(request.provider or settings.index.provider)
+
+    bundle_path = Path(request.bundle_path).expanduser()
+    if not bundle_path.exists():
+        raise SynapseNotFoundError(f"Prepared bundle not found: {bundle_path}")
+
+    store = create_vector_store(settings, db_path=db, embedding_dim=provider.dimensions)
+    store.initialize()
+    try:
+        ingestor = ResearchBundleIngestor(
+            db=store,
+            embedding_client=EmbeddingClient.from_provider(provider),
+        )
+        result = ingestor.ingest_bundle_file(bundle_path)
+    finally:
+        store.close()
+
+    return IngestBundleResponse(
+        bundle_id=result.bundle_id,
+        bundle_path=result.bundle_path,
+        database_path=str(db),
+        provider=provider.name,
+        replaced_existing=result.replaced_existing,
+        source_count=result.source_count,
+        segment_count=result.segment_count,
     )
 
 
