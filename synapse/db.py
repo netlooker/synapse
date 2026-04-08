@@ -584,6 +584,98 @@ class Database:
             results.append(segment)
         return results
 
+    def search_segments_lexical(
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Search indexed source-first segments with FTS5/BM25."""
+        cur = self.conn.cursor()
+        where_clauses = ["segments_fts MATCH ?"]
+        params: list[Any] = [query]
+        filter_sql, filter_params = _segment_filter_sql(filters)
+        where_clauses.extend(filter_sql)
+        params.extend(filter_params)
+        params.append(limit)
+
+        rows = cur.execute(f"""
+            SELECT
+                s.id AS segment_id,
+                s.owner_kind,
+                s.content_role,
+                s.segment_index,
+                s.text AS segment_text,
+                s.token_count,
+                src.id AS source_row_id,
+                b.bundle_id,
+                src.source_id,
+                src.title AS source_title,
+                src.origin_url,
+                src.direct_paper_url,
+                src.source_type,
+                n.id AS note_row_id,
+                n.note_path,
+                n.title AS note_title,
+                n.note_kind,
+                bm25(segments_fts) AS bm25_score
+            FROM segments_fts
+            JOIN segments s ON s.id = segments_fts.segment_id
+            LEFT JOIN sources src ON src.id = COALESCE(s.source_row_id, s.owner_source_id)
+            LEFT JOIN bundles b ON b.id = src.bundle_row_id
+            LEFT JOIN notes n ON n.id = COALESCE(s.note_row_id, s.owner_note_id)
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY bm25_score, s.id
+            LIMIT ?
+        """, params).fetchall()
+        return [_segment_search_row(dict(row), lexical=True) for row in rows]
+
+    def search_segments_vector(
+        self,
+        query_embedding: list[float],
+        *,
+        limit: int = 10,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Search indexed source-first segments with sqlite-vec."""
+        cur = self.conn.cursor()
+        where_clauses = ["embedding MATCH ?", "k = ?"]
+        params: list[Any] = [_serialize_f32(query_embedding), limit]
+        filter_sql, filter_params = _segment_filter_sql(filters)
+        where_clauses.extend(filter_sql)
+        params.extend(filter_params)
+
+        rows = cur.execute(f"""
+            SELECT
+                s.id AS segment_id,
+                s.owner_kind,
+                s.content_role,
+                s.segment_index,
+                s.text AS segment_text,
+                s.token_count,
+                src.id AS source_row_id,
+                b.bundle_id,
+                src.source_id,
+                src.title AS source_title,
+                src.origin_url,
+                src.direct_paper_url,
+                src.source_type,
+                n.id AS note_row_id,
+                n.note_path,
+                n.title AS note_title,
+                n.note_kind,
+                distance
+            FROM vec_segments v
+            JOIN segments s ON s.id = v.segment_id
+            LEFT JOIN sources src ON src.id = COALESCE(s.source_row_id, s.owner_source_id)
+            LEFT JOIN bundles b ON b.id = src.bundle_row_id
+            LEFT JOIN notes n ON n.id = COALESCE(s.note_row_id, s.owner_note_id)
+            WHERE {" AND ".join(where_clauses)}
+            ORDER BY distance
+        """, params).fetchall()
+        return [_segment_search_row(dict(row), lexical=False) for row in rows]
+
     def insert_chunk(
         self,
         doc_id: int,
@@ -776,3 +868,45 @@ def _estimate_tokens(text: str) -> int:
     if not cleaned:
         return 0
     return max(1, round(len(cleaned) / 4))
+
+
+def _segment_filter_sql(filters: dict[str, Any] | None) -> tuple[list[str], list[Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if not filters:
+        return clauses, params
+
+    if owner_kind := filters.get("owner_kind"):
+        clauses.append("s.owner_kind = ?")
+        params.append(owner_kind)
+    if bundle_id := filters.get("bundle_id"):
+        clauses.append("b.bundle_id = ?")
+        params.append(bundle_id)
+    if source_id := filters.get("source_id"):
+        clauses.append("src.source_id = ?")
+        params.append(source_id)
+    if source_type := filters.get("source_type"):
+        clauses.append("src.source_type = ?")
+        params.append(source_type)
+    if content_role := filters.get("content_role"):
+        clauses.append("s.content_role = ?")
+        params.append(content_role)
+    if note_path := filters.get("note_path"):
+        clauses.append("n.note_path = ?")
+        params.append(note_path)
+    return clauses, params
+
+
+def _segment_search_row(row: dict[str, Any], *, lexical: bool) -> dict[str, Any]:
+    bm25_score = row.pop("bm25_score", None)
+    distance = row.pop("distance", None)
+    vector_score = None if distance is None else 1.0 / (1.0 + max(distance, 0.0))
+    title = row.get("source_title") or row.get("note_title")
+    result = {
+        **row,
+        "title": title,
+        "bm25_score": bm25_score if lexical else None,
+        "vector_score": vector_score,
+        "distance": distance,
+    }
+    return result

@@ -1,7 +1,9 @@
 """
-synapse.search - Query interface for semantic search
+synapse.search - Query interface for source-first research search.
 """
-import re
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
@@ -11,7 +13,7 @@ from .vector_store import VectorStore, create_vector_store
 
 
 class Searcher:
-    """Semantic search over the indexed markdown corpus."""
+    """Hybrid lexical/vector search over the source-first Synapse corpus."""
 
     def __init__(
         self,
@@ -24,386 +26,289 @@ class Searcher:
         search_settings: SearchSettings | None = None,
     ):
         self.db = db
-        default_embedder = embedding_client or EmbeddingClient(
+        default_embedder = embedding_client or note_embedding_client or chunk_embedding_client or EmbeddingClient(
             base_url=embedding_host or "http://127.0.0.1:11434",
             model=embedding_model or "nomic-embed-text:v1.5",
         )
-        self.note_embedder = note_embedding_client or default_embedder
-        self.chunk_embedder = chunk_embedding_client or default_embedder
+        self.embedder = default_embedder
         self.search_settings = search_settings or SearchSettings()
 
     def search(
-        self, 
-        query: str, 
+        self,
+        query: str,
         limit: int = 5,
-        mode: str = "hybrid",
+        mode: str = "research",
+        filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Search for documents similar to the query.
-        
-        Returns list of results with path, title, similarity, and snippet.
-        """
-        if mode not in {"note", "chunk", "hybrid"}:
+        if mode not in {"source", "note", "evidence", "research"}:
             raise ValueError(f"Unsupported search mode: {mode}")
 
-        note_query_embedding = None
-        chunk_query_embedding = None
+        search_filters = dict(filters or {})
+        if mode == "source":
+            search_filters["owner_kind"] = "source"
+        elif mode == "note":
+            search_filters["owner_kind"] = "note"
 
+        candidate_limit = _candidate_limit(limit, self.search_settings.candidate_multiplier)
+        lexical_hits = self.db.search_segments_lexical(
+            query,
+            limit=candidate_limit,
+            filters=search_filters,
+        )
+        vector_hits = self.db.search_segments_vector(
+            self.embedder.embed_query(query),
+            limit=candidate_limit,
+            filters=search_filters,
+        )
+
+        merged = _merge_segment_candidates(
+            lexical_hits,
+            vector_hits,
+            lexical_weight=self.search_settings.note_weight,
+            vector_weight=self.search_settings.chunk_weight,
+        )
+
+        if mode == "evidence":
+            ranked = sorted(merged.values(), key=lambda item: item["combined_score"], reverse=True)
+            return [_evidence_result(item) for item in ranked[:limit]]
         if mode == "note":
-            note_query_embedding = self.note_embedder.embed_query(query)
-            note_results = self.db.search_similar(
-                note_query_embedding,
-                limit=limit * 2,
-                scope="note",
-            )
-            return _dedupe_results(note_results, limit, query)
-
-        if mode == "chunk":
-            chunk_query_embedding = self.chunk_embedder.embed_query(query)
-            chunk_results = self.db.search_similar(
-                chunk_query_embedding,
-                limit=limit * 2,
-                scope="chunk",
-            )
-            return _dedupe_results(chunk_results, limit, query)
-
-        note_query_embedding = self.note_embedder.embed_query(query)
-        chunk_query_embedding = self.chunk_embedder.embed_query(query)
-        note_results = self.db.search_similar(
-            note_query_embedding,
-            limit=_candidate_limit(limit, self.search_settings.candidate_multiplier),
-            scope="note",
-        )
-        candidate_paths = [row["path"] for row in note_results]
-        chunk_limit = _candidate_limit(limit, self.search_settings.candidate_multiplier)
-        chunk_results = self.db.search_similar(
-            chunk_query_embedding,
-            limit=chunk_limit,
-            scope="chunk",
-            include_paths=candidate_paths or None,
-        )
-        if len(chunk_results) < limit:
-            fallback_chunk_results = self.db.search_similar(
-                chunk_query_embedding,
-                limit=chunk_limit,
-                scope="chunk",
-            )
-            chunk_results = _merge_chunk_candidates(chunk_results, fallback_chunk_results)
-
-        return _merge_hybrid_results(
-            note_results,
-            chunk_results,
-            limit,
-            note_weight=self.search_settings.note_weight,
-            chunk_weight=self.search_settings.chunk_weight,
-            candidate_paths=set(candidate_paths),
-            query=query,
-        )
+            return _aggregate_results(merged.values(), limit=limit, mode="note")
+        if mode == "source":
+            return _aggregate_results(merged.values(), limit=limit, mode="source")
+        return _aggregate_results(merged.values(), limit=limit, mode="research")
 
 
 def _candidate_limit(limit: int, multiplier: int) -> int:
     return max(limit, limit * max(1, multiplier))
 
 
+def _merge_segment_candidates(
+    lexical_hits: list[dict[str, Any]],
+    vector_hits: list[dict[str, Any]],
+    *,
+    lexical_weight: float,
+    vector_weight: float,
+) -> dict[int, dict[str, Any]]:
+    merged: dict[int, dict[str, Any]] = {}
+    lexical_weight, vector_weight = _normalize_weights(lexical_weight, vector_weight)
+    rrf_k = 60.0
+
+    for rank, row in enumerate(lexical_hits, start=1):
+        item = merged.setdefault(row["segment_id"], dict(row))
+        item["bm25_score"] = row.get("bm25_score")
+        item["lexical_rank"] = rank
+        item["lexical_contribution"] = lexical_weight / (rrf_k + rank)
+
+    for rank, row in enumerate(vector_hits, start=1):
+        item = merged.setdefault(row["segment_id"], dict(row))
+        item["vector_score"] = row.get("vector_score")
+        item["distance"] = row.get("distance")
+        item["vector_rank"] = rank
+        item["vector_contribution"] = vector_weight / (rrf_k + rank)
+
+    for item in merged.values():
+        role_bonus = _role_bonus(item.get("content_role"))
+        cross_bonus = 0.02 if item.get("lexical_rank") and item.get("vector_rank") else 0.0
+        item["combined_score"] = (
+            item.get("lexical_contribution", 0.0)
+            + item.get("vector_contribution", 0.0)
+            + role_bonus
+            + cross_bonus
+        )
+        item["title"] = item.get("title") or item.get("source_title") or item.get("note_title")
+        item["rank_reason"] = _rank_reason(item, role_bonus, cross_bonus)
+    return merged
+
+
+def _aggregate_results(
+    items: list[dict[str, Any]],
+    *,
+    limit: int,
+    mode: str,
+) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+
+    for item in items:
+        key, result_kind = _group_key(item, mode)
+        if key is None:
+            continue
+        group = groups.get((result_kind, key))
+        if group is None:
+            groups[(result_kind, key)] = {
+                "result_kind": result_kind,
+                "group_key": key,
+                "best_item": item,
+                "score": item["combined_score"],
+                "match_count": 1,
+            }
+            continue
+        group["match_count"] += 1
+        if item["combined_score"] > group["best_item"]["combined_score"]:
+            group["best_item"] = item
+        group["score"] = max(group["score"], item["combined_score"])
+
+    results: list[dict[str, Any]] = []
+    for group in groups.values():
+        best_item = group["best_item"]
+        support_bonus = min(0.03, 0.01 * max(group["match_count"] - 1, 0))
+        combined_score = group["score"] + support_bonus
+        results.append({
+            "result_kind": group["result_kind"],
+            "title": best_item.get("title"),
+            "bundle_id": best_item.get("bundle_id"),
+            "source_id": best_item.get("source_id"),
+            "note_path": best_item.get("note_path"),
+            "origin_url": best_item.get("origin_url"),
+            "direct_paper_url": best_item.get("direct_paper_url"),
+            "matched_content_role": best_item.get("content_role"),
+            "matched_segment_text": _truncate(best_item.get("segment_text", ""), 260),
+            "bm25_score": best_item.get("bm25_score"),
+            "vector_score": best_item.get("vector_score"),
+            "combined_score": combined_score,
+            "rank_reason": _aggregate_rank_reason(best_item, group["match_count"], support_bonus),
+        })
+
+    results.sort(key=lambda item: item["combined_score"], reverse=True)
+    return results[:limit]
+
+
+def _group_key(item: dict[str, Any], mode: str) -> tuple[str | None, str]:
+    if mode == "source":
+        source_id = item.get("source_id")
+        return (source_id, "source") if source_id else (None, "source")
+    if mode == "note":
+        note_path = item.get("note_path") or (str(item.get("note_row_id")) if item.get("note_row_id") else None)
+        return (note_path, "note") if note_path else (None, "note")
+    if item.get("source_id"):
+        return item["source_id"], "source"
+    note_path = item.get("note_path") or (str(item.get("note_row_id")) if item.get("note_row_id") else None)
+    if note_path:
+        return note_path, "note"
+    return None, "evidence"
+
+
+def _evidence_result(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "result_kind": "evidence",
+        "title": item.get("title"),
+        "bundle_id": item.get("bundle_id"),
+        "source_id": item.get("source_id"),
+        "note_path": item.get("note_path"),
+        "origin_url": item.get("origin_url"),
+        "direct_paper_url": item.get("direct_paper_url"),
+        "matched_content_role": item.get("content_role"),
+        "matched_segment_text": _truncate(item.get("segment_text", ""), 260),
+        "bm25_score": item.get("bm25_score"),
+        "vector_score": item.get("vector_score"),
+        "combined_score": item.get("combined_score", 0.0),
+        "rank_reason": item.get("rank_reason", ""),
+    }
+
+
+def _normalize_weights(lexical_weight: float, vector_weight: float) -> tuple[float, float]:
+    total = max(lexical_weight + vector_weight, 0.0001)
+    return lexical_weight / total, vector_weight / total
+
+
+def _role_bonus(content_role: str | None) -> float:
+    bonuses = {
+        "summary": 0.08,
+        "abstract": 0.05,
+        "full_text": 0.02,
+        "note_body": 0.01,
+    }
+    return bonuses.get(content_role or "", 0.0)
+
+
 def _truncate(text: str, max_len: int) -> str:
-    """Truncate text to max length, adding ellipsis if needed."""
     text = text.strip().replace("\n", " ")
     if len(text) <= max_len:
         return text
-    return text[:max_len - 3] + "..."
+    return text[: max_len - 3] + "..."
 
 
-def _dedupe_results(results: list[dict[str, Any]], limit: int, query: str) -> list[dict[str, Any]]:
-    seen_paths = set()
-    unique_results = []
-    query_terms = _query_terms(query)
-
-    for r in results:
-        if r["path"] in seen_paths:
-            continue
-        seen_paths.add(r["path"])
-        metadata_boost = _metadata_boost(r, query_terms)
-        unique_results.append({
-            "path": r["path"],
-            "title": r["title"],
-            "similarity": min(1.0, r["similarity"] + metadata_boost),
-            "snippet": _truncate(r["chunk_text"], 200),
-            "metadata_boost": metadata_boost,
-        })
-
-    unique_results.sort(key=lambda row: row["similarity"], reverse=True)
-    return unique_results[:limit]
+def _rank_reason(item: dict[str, Any], role_bonus: float, cross_bonus: float) -> str:
+    parts = []
+    if item.get("lexical_rank"):
+        parts.append(f"lexical rank {item['lexical_rank']}")
+    if item.get("vector_rank"):
+        parts.append(f"vector rank {item['vector_rank']}")
+    if item.get("content_role"):
+        parts.append(f"matched {item['content_role']}")
+    if role_bonus > 0:
+        parts.append(f"role bonus {role_bonus:.2f}")
+    if cross_bonus > 0:
+        parts.append("hybrid agreement")
+    return ", ".join(parts)
 
 
-def _merge_hybrid_results(
-    note_results: list[dict[str, Any]],
-    chunk_results: list[dict[str, Any]],
-    limit: int,
-    *,
-    note_weight: float = 0.4,
-    chunk_weight: float = 0.6,
-    candidate_paths: set[str] | None = None,
-    query: str = "",
-) -> list[dict[str, Any]]:
-    merged: dict[str, dict[str, Any]] = {}
-    normalized_note_weight, normalized_chunk_weight = _normalize_weights(note_weight, chunk_weight)
-    candidate_paths = candidate_paths or set()
-    query_terms = _query_terms(query)
-
-    for result in note_results:
-        merged[result["path"]] = {
-            "path": result["path"],
-            "title": result["title"],
-            "note_similarity": result["similarity"],
-            "chunk_similarity": 0.0,
-            "snippet": _truncate(result["chunk_text"], 200),
-            "source": "note",
-            "candidate_boost": 0.0,
-            "metadata": result,
-        }
-
-    for result in chunk_results:
-        row = merged.get(result["path"])
-        snippet = _truncate(result["chunk_text"], 200)
-        if row is None:
-            row = {
-                "path": result["path"],
-                "title": result["title"],
-                "note_similarity": 0.0,
-                "chunk_similarity": 0.0,
-                "snippet": snippet,
-                "source": "chunk",
-                "candidate_boost": 0.0,
-                "metadata": result,
-            }
-            merged[result["path"]] = row
-        row["chunk_similarity"] = max(row["chunk_similarity"], result["similarity"])
-        if row["source"] != "chunk" or row["chunk_similarity"] == result["similarity"]:
-            row["snippet"] = snippet
-            row["source"] = "chunk"
-            row["metadata"] = result
-        if result["path"] in candidate_paths:
-            row["candidate_boost"] = max(row["candidate_boost"], 0.05)
-        row["metadata_boost"] = max(
-            row.get("metadata_boost", 0.0),
-            _metadata_boost(result, query_terms),
-        )
-
-    ranked = sorted(
-        (
-            _finalize_hybrid_row(row, normalized_note_weight, normalized_chunk_weight)
-            for row in merged.values()
-        ),
-        key=lambda row: row["similarity"],
-        reverse=True,
-    )
-    return ranked[:limit]
+def _aggregate_rank_reason(best_item: dict[str, Any], match_count: int, support_bonus: float) -> str:
+    parts = [best_item.get("rank_reason", "")]
+    if match_count > 1:
+        parts.append(f"{match_count} supporting segments")
+    if support_bonus > 0:
+        parts.append(f"support bonus {support_bonus:.2f}")
+    return ", ".join(part for part in parts if part)
 
 
-def _merge_chunk_candidates(
-    primary_results: list[dict[str, Any]],
-    fallback_results: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    merged: dict[str, dict[str, Any]] = {row["path"]: row for row in primary_results}
-    for row in fallback_results:
-        existing = merged.get(row["path"])
-        if existing is None or row["similarity"] > existing["similarity"]:
-            merged[row["path"]] = row
-    return list(merged.values())
-
-
-def _normalize_weights(note_weight: float, chunk_weight: float) -> tuple[float, float]:
-    total = max(note_weight + chunk_weight, 0.0001)
-    return note_weight / total, chunk_weight / total
-
-
-def _finalize_hybrid_row(
-    row: dict[str, Any],
-    note_weight: float,
-    chunk_weight: float,
-) -> dict[str, Any]:
-    note_similarity = row["note_similarity"]
-    chunk_similarity = row["chunk_similarity"]
-    agreement_bonus = 0.1 * min(note_similarity, chunk_similarity)
-    similarity = min(
-        1.0,
-        (note_weight * note_similarity)
-        + (chunk_weight * chunk_similarity)
-        + row.get("candidate_boost", 0.0)
-        + row.get("metadata_boost", 0.0)
-        + agreement_bonus,
-    )
-    return {
-        "path": row["path"],
-        "title": row["title"],
-        "similarity": similarity,
-        "snippet": row["snippet"],
-        "note_similarity": note_similarity,
-        "chunk_similarity": chunk_similarity,
-        "metadata_boost": row.get("metadata_boost", 0.0),
-    }
-
-
-def _query_terms(query: str) -> set[str]:
-    return {
-        token
-        for token in re.split(r"[^a-zA-Z0-9]+", query.lower())
-        if len(token) >= 3
-    }
-
-
-def _metadata_boost(row: dict[str, Any], query_terms: set[str]) -> float:
-    if not query_terms:
-        return 0.0
-    metadata_terms = _collect_metadata_terms(row)
-    overlap = len(query_terms & metadata_terms)
-    return min(0.12, overlap * 0.04)
-
-
-def _collect_metadata_terms(row: dict[str, Any]) -> set[str]:
-    terms: set[str] = set()
-    for value in [row.get("title"), row.get("path"), row.get("chunk_text")]:
-        terms.update(_tokenize(value))
-    for tag in row.get("tags", []) or []:
-        terms.update(_tokenize(str(tag)))
-    for link in row.get("wikilinks", []) or []:
-        terms.update(_tokenize(str(link)))
-    frontmatter = row.get("frontmatter", {}) or {}
-    if isinstance(frontmatter, dict):
-        for key, value in frontmatter.items():
-            terms.update(_tokenize(key))
-            if isinstance(value, list):
-                for item in value:
-                    terms.update(_tokenize(str(item)))
-            else:
-                terms.update(_tokenize(str(value)))
-    return terms
-
-
-def _tokenize(value: str | None) -> set[str]:
-    if not value:
-        return set()
-    return {
-        token
-        for token in re.split(r"[^a-zA-Z0-9]+", value.lower())
-        if len(token) >= 3
-    }
-
-
-def main():
-    """CLI entry point for synapse-search."""
+def main() -> None:
     import argparse
-    
-    parser = argparse.ArgumentParser(description="Semantic search over markdown notes")
+
+    parser = argparse.ArgumentParser(description="Hybrid source-first search over Synapse research corpora")
     parser.add_argument("query", help="Search query")
-    parser.add_argument(
-        "--config",
-        default=None,
-        help="Path to Synapse TOML config"
-    )
-    parser.add_argument(
-        "--db",
-        default=None,
-        help="Path to SQLite database"
-    )
-    parser.add_argument(
-        "--provider",
-        default=None,
-        help="Note embedding provider name from the Synapse config"
-    )
-    parser.add_argument(
-        "--chunk-provider",
-        default=None,
-        help="Chunk embedding provider name from the Synapse config"
-    )
-    parser.add_argument(
-        "--base-url",
-        "--ollama-host",
-        dest="base_url",
-        default=None,
-        help="Override embedding endpoint base URL"
-    )
-    parser.add_argument(
-        "--model",
-        default=None,
-        help="Embedding model to use"
-    )
-    parser.add_argument(
-        "-n", "--limit",
-        type=int,
-        default=None,
-        help="Number of results to return"
-    )
+    parser.add_argument("--config", default=None, help="Path to Synapse TOML config")
+    parser.add_argument("--db", default=None, help="Path to SQLite database")
+    parser.add_argument("--provider", default=None, help="Embedding provider name from the Synapse config")
     parser.add_argument(
         "--mode",
-        choices=["note", "chunk", "hybrid"],
-        default=None,
-        help="Search scope to use"
+        default="research",
+        choices=("source", "note", "evidence", "research"),
+        help="Search surface to query",
     )
-    
+    parser.add_argument("--limit", type=int, default=None, help="Maximum results to return")
+    parser.add_argument("--bundle-id", default=None, help="Optional bundle_id filter")
+    parser.add_argument("--source-id", default=None, help="Optional source_id filter")
+    parser.add_argument("--source-type", default=None, help="Optional source_type filter")
+
     args = parser.parse_args()
     settings = load_settings(args.config)
-    note_provider = settings.embedding_provider(args.provider or settings.search.provider)
-    chunk_provider = settings.embedding_provider(args.chunk_provider or settings.index.contextual_provider)
-    if note_provider.dimensions != chunk_provider.dimensions:
-        raise ValueError(
-            f"Note provider dimension {note_provider.dimensions} must match chunk provider dimension {chunk_provider.dimensions}"
-        )
+    provider = settings.embedding_provider(args.provider or settings.search.provider)
     db_path = Path(args.db or settings.database.path).expanduser()
-    
-    if not db_path.exists():
-        print(f"❌ Database not found: {db_path}")
-        print("   Run synapse-index first.")
-        return
-    
-    # Initialize
-    db = create_vector_store(settings, db_path=db_path, embedding_dim=note_provider.dimensions)
-    db.initialize()
-    
-    searcher = Searcher(
-        db=db, 
-        note_embedding_client=EmbeddingClient(
-            provider_type=note_provider.type,
-            base_url=args.base_url or note_provider.base_url,
-            model=args.model or note_provider.model,
-            dimensions=note_provider.dimensions,
-            api_key=note_provider.api_key(),
-            encoding_format=note_provider.encoding_format,
-            context_strategy=note_provider.context_strategy,
-        ),
-        chunk_embedding_client=EmbeddingClient(
-            provider_type=chunk_provider.type,
-            base_url=chunk_provider.base_url,
-            model=chunk_provider.model,
-            dimensions=chunk_provider.dimensions,
-            api_key=chunk_provider.api_key(),
-            encoding_format=chunk_provider.encoding_format,
-            context_strategy=chunk_provider.context_strategy,
-        ),
-        search_settings=settings.search,
-    )
-    
-    # Search
-    print(f"🔍 Searching for: {args.query}")
-    print()
-    
-    results = searcher.search(
-        args.query,
-        limit=args.limit or settings.search.limit,
-        mode=args.mode or settings.search.mode,
-    )
-    
-    if not results:
-        print("No results found.")
-        return
-    
-    for i, r in enumerate(results, 1):
-        sim_pct = r["similarity"] * 100
-        print(f"{i}. [{sim_pct:.1f}%] {r['title'] or r['path']}")
-        print(f"   📄 {r['path']}")
-        print(f"   {r['snippet']}")
+
+    store = create_vector_store(settings, db_path=db_path, embedding_dim=provider.dimensions)
+    store.initialize()
+    try:
+        searcher = Searcher(
+            db=store,
+            embedding_client=EmbeddingClient.from_provider(provider),
+            search_settings=settings.search,
+        )
+        results = searcher.search(
+            query=args.query,
+            limit=args.limit or settings.search.limit,
+            mode=args.mode,
+            filters={
+                key: value
+                for key, value in {
+                    "bundle_id": args.bundle_id,
+                    "source_id": args.source_id,
+                    "source_type": args.source_type,
+                }.items()
+                if value is not None
+            },
+        )
+    finally:
+        store.close()
+
+    for result in results:
+        locator = result["direct_paper_url"] or result["origin_url"] or result["note_path"] or result["source_id"]
+        print(f"[{result['result_kind']}] {result['title'] or '(untitled)'}")
+        print(f"  Score: {result['combined_score']:.4f}")
+        print(f"  Match: {result['matched_content_role']} | {result['matched_segment_text']}")
+        if locator:
+            print(f"  Locator: {locator}")
+        print(f"  Why: {result['rank_reason']}")
         print()
-    
-    db.close()
 
 
 if __name__ == "__main__":

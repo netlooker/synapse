@@ -265,3 +265,52 @@ class TestChunkOperations:
             assert len(results) == 1
             assert results[0]["path"] == "vault/b.md"
             db.close()
+
+
+class TestSourceFirstSearchOperations:
+    def test_segment_search_supports_lexical_and_vector_queries(self):
+        from synapse.db import Database
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.sqlite"
+            db = Database(db_path, embedding_dim=4)
+            db.initialize()
+
+            bundle_row_id = db.upsert_bundle("bundle-1", "hash-1", commit=False)
+            source_row_id = db.insert_source(
+                bundle_row_id,
+                "source-1",
+                title="Weak Signals",
+                summary_text="Weak signals summary",
+                source_type="paper",
+                commit=False,
+            )
+            db.insert_segment(
+                owner_kind="source",
+                owner_id=source_row_id,
+                source_row_id=source_row_id,
+                content_role="summary",
+                segment_index=0,
+                text="Weak signals summary for retrieval systems.",
+                embedding=[0.1, 0.1, 0.1, 0.1],
+                commit=False,
+            )
+            db.conn.commit()
+
+            lexical = db.search_segments_lexical(
+                "weak signals",
+                limit=5,
+                filters={"bundle_id": "bundle-1", "owner_kind": "source"},
+            )
+            vector = db.search_segments_vector(
+                [0.1, 0.1, 0.1, 0.1],
+                limit=5,
+                filters={"source_id": "source-1"},
+            )
+
+            assert len(lexical) == 1
+            assert lexical[0]["source_id"] == "source-1"
+            assert lexical[0]["title"] == "Weak Signals"
+            assert len(vector) == 1
+            assert vector[0]["vector_score"] is not None
+            db.close()

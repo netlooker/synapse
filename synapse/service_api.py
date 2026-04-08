@@ -106,20 +106,28 @@ class SearchRequest(BaseModel):
     query: str
     config_path: str | None = None
     db_path: str | None = None
-    note_provider: str | None = None
-    chunk_provider: str | None = None
-    mode: Literal["note", "chunk", "hybrid"] = "hybrid"
+    provider: str | None = None
+    mode: Literal["source", "note", "evidence", "research"] = "research"
     limit: int | None = None
+    bundle_id: str | None = None
+    source_id: str | None = None
+    source_type: str | None = None
 
 
 class SearchResult(BaseModel):
-    path: str
-    title: str
-    similarity: float
-    snippet: str
-    note_similarity: float | None = None
-    chunk_similarity: float | None = None
-    metadata_boost: float | None = None
+    result_kind: Literal["source", "note", "evidence"]
+    title: str | None = None
+    bundle_id: str | None = None
+    source_id: str | None = None
+    note_path: str | None = None
+    origin_url: str | None = None
+    direct_paper_url: str | None = None
+    matched_content_role: str
+    matched_segment_text: str
+    bm25_score: float | None = None
+    vector_score: float | None = None
+    combined_score: float
+    rank_reason: str
 
 
 class SearchResponse(BaseModel):
@@ -143,8 +151,11 @@ class WorkspaceIndexRequest(BaseModel):
 class WorkspaceSearchRequest(BaseModel):
     query: str
     workspace: WorkspaceHandle = "current"
-    mode: Literal["note", "chunk", "hybrid"] = "hybrid"
+    mode: Literal["source", "note", "evidence", "research"] = "research"
     limit: int | None = None
+    bundle_id: str | None = None
+    source_id: str | None = None
+    source_type: str | None = None
 
 
 class DiscoverRequest(BaseModel):
@@ -315,23 +326,29 @@ def search_index(request: SearchRequest) -> SearchResponse:
     if not db.exists():
         raise SynapseNotFoundError(f"Synapse database not found: {db}")
 
-    note_cfg = settings.embedding_provider(request.note_provider or settings.search.provider)
-    chunk_cfg = settings.embedding_provider(request.chunk_provider or settings.index.contextual_provider)
-    _assert_matching_dimensions(note_cfg, chunk_cfg)
+    provider = settings.embedding_provider(request.provider or settings.search.provider)
 
-    store = create_vector_store(settings, db_path=db, embedding_dim=note_cfg.dimensions)
+    store = create_vector_store(settings, db_path=db, embedding_dim=provider.dimensions)
     store.initialize()
     try:
         searcher = Searcher(
             db=store,
-            note_embedding_client=EmbeddingClient.from_provider(note_cfg),
-            chunk_embedding_client=EmbeddingClient.from_provider(chunk_cfg),
+            embedding_client=EmbeddingClient.from_provider(provider),
             search_settings=settings.search,
         )
         results = searcher.search(
             query=request.query,
             limit=request.limit or settings.search.limit,
             mode=request.mode,
+            filters={
+                key: value
+                for key, value in {
+                    "bundle_id": request.bundle_id,
+                    "source_id": request.source_id,
+                    "source_type": request.source_type,
+                }.items()
+                if value is not None
+            },
         )
     finally:
         store.close()
@@ -411,6 +428,9 @@ def search_index_for_workspace(request: WorkspaceSearchRequest) -> SearchRespons
             query=request.query,
             mode=request.mode,
             limit=request.limit,
+            bundle_id=request.bundle_id,
+            source_id=request.source_id,
+            source_type=request.source_type,
         )
     )
 

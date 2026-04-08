@@ -57,8 +57,8 @@ PLAIN_QUERY_DESCRIPTION = (
     'Invalid example: {"db_path": "{\\"/abs/synapse.sqlite\\"},query:\\"cross-paper insights\\"}"}.'
 )
 SEARCH_MODE_DESCRIPTION = (
-    "Search mode as a top-level string. Use one of: note, chunk, hybrid. "
-    'Valid example: {"mode": "hybrid"}. '
+    "Search mode as a top-level string. Use one of: source, note, evidence, research. "
+    'Valid example: {"mode": "research"}. '
     'Invalid example: encoding mode inside db_path or passing nested mode objects.'
 )
 INDEX_TOOL_DESCRIPTION = (
@@ -77,12 +77,12 @@ SEARCH_TOOL_DESCRIPTION = (
     "Search an indexed Synapse database. "
     "query must be a top-level string field. mode must be a top-level string field. "
     "db_path must be a plain string path. Do not encode multiple parameters inside db_path. "
-    'Valid arguments: {"query": "cross-paper insights", "mode": "hybrid", "db_path": "/abs/synapse.sqlite"}. '
-    'Invalid arguments: {"db_path": "{\\"/abs/synapse.sqlite\\"},mode:\\"hybrid\\",query:\\"cross-paper insights\\"}"}.'
+    'Valid arguments: {"query": "cross-paper insights", "mode": "research", "db_path": "/abs/synapse.sqlite"}. '
+    'Invalid arguments: {"db_path": "{\\"/abs/synapse.sqlite\\"},mode:\\"research\\",query:\\"cross-paper insights\\"}"}.'
 )
 SEARCH_SIMPLE_TOOL_DESCRIPTION = (
     "Minimal search call for local-model agents. "
-    "Call with top-level query plus plain string db_path. mode defaults to hybrid."
+    "Call with top-level query plus plain string db_path. mode defaults to research."
 )
 WORKSPACE_HANDLE_DESCRIPTION = (
     "Stable Synapse workspace handle. Use 'current' to target the workspace configured for this server. "
@@ -163,12 +163,12 @@ def _normalize_mode_value(value: Any) -> Any:
         value = value["mode"]
     if isinstance(value, str):
         stripped = value.strip().strip('"').lower()
-        if stripped in {"note", "chunk", "hybrid"}:
+        if stripped in {"source", "note", "evidence", "research"}:
             return stripped
-        if stripped in {"0", "1", "2"}:
-            return {0: "note", 1: "chunk", 2: "hybrid"}[int(stripped)]
+        if stripped in {"0", "1", "2", "3"}:
+            return {0: "source", 1: "note", 2: "research", 3: "evidence"}[int(stripped)]
     if isinstance(value, int):
-        return {0: "note", 1: "chunk", 2: "hybrid"}.get(value, value)
+        return {0: "source", 1: "note", 2: "research", 3: "evidence"}.get(value, value)
     return value
 
 
@@ -277,7 +277,7 @@ RequiredPlainPathArg = Annotated[
 ]
 QueryArg = Annotated[str, Field(description=PLAIN_QUERY_DESCRIPTION)]
 SearchModeArg = Annotated[
-    Literal["note", "chunk", "hybrid"],
+    Literal["source", "note", "evidence", "research"],
     BeforeValidator(_coerce_mode_arg),
     Field(description=SEARCH_MODE_DESCRIPTION),
 ]
@@ -453,9 +453,8 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         query: QueryArg,
         config_path: OptionalPlainPathArg = None,
         db_path: OptionalPlainPathArg = None,
-        note_provider: str | None = None,
-        chunk_provider: str | None = None,
-        mode: SearchModeArg = "hybrid",
+        provider: str | None = None,
+        mode: SearchModeArg = "research",
         limit: int | None = None,
     ) -> dict[str, Any]:
         return search_index(
@@ -463,8 +462,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
                 query=query,
                 config_path=config_path,
                 db_path=db_path,
-                note_provider=note_provider,
-                chunk_provider=chunk_provider,
+                provider=provider,
                 mode=mode,
                 limit=limit,
             )
@@ -477,7 +475,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
     def synapse_search_simple(
         query: QueryArg,
         db_path: RequiredPlainPathArg,
-        mode: SearchModeArg = "hybrid",
+        mode: SearchModeArg = "research",
     ) -> dict[str, Any]:
         return search_index(
             SearchRequest(
@@ -494,7 +492,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
     def synapse_search_for_workspace_tool(
         query: QueryArg,
         workspace: WorkspaceArg = "current",
-        mode: SearchModeArg = "hybrid",
+        mode: SearchModeArg = "research",
         limit: int | None = None,
     ) -> dict[str, Any]:
         return search_index_for_workspace(

@@ -53,17 +53,22 @@ def test_health_endpoint_reports_runtime(tmp_path):
 def test_search_endpoint_uses_shared_service(monkeypatch):
     expected = SearchResponse(
         query="signal",
-        mode="hybrid",
+        mode="research",
         database_path="/tmp/synapse.sqlite",
         results=[
             SearchResult(
-                path="weak-signals.md",
+                result_kind="source",
                 title="Weak Signals",
-                similarity=0.77,
-                snippet="Hidden relationships",
-                note_similarity=0.61,
-                chunk_similarity=0.72,
-                metadata_boost=0.08,
+                bundle_id="bundle-1",
+                source_id="source-weak-signals",
+                origin_url="https://example.com/weak-signals",
+                direct_paper_url=None,
+                matched_content_role="summary",
+                matched_segment_text="Hidden relationships",
+                bm25_score=0.18,
+                vector_score=0.72,
+                combined_score=0.77,
+                rank_reason="lexical rank 1, vector rank 2, matched summary",
             )
         ],
     )
@@ -83,7 +88,7 @@ def test_search_endpoint_uses_shared_service(monkeypatch):
             "query": "signal",
             "config_path": "config/synapse.example.toml",
             "db_path": "/tmp/synapse.sqlite",
-            "mode": "hybrid",
+            "mode": "research",
             "limit": 3,
         },
     )
@@ -91,7 +96,7 @@ def test_search_endpoint_uses_shared_service(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["results"][0]["title"] == "Weak Signals"
-    assert payload["results"][0]["metadata_boost"] == 0.08
+    assert payload["results"][0]["combined_score"] == 0.77
 
 
 def test_cipher_explain_endpoint_returns_structured_response():

@@ -301,12 +301,12 @@ def test_search_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_path):
     async def exercise() -> None:
         result = await server._tool_manager._tools["synapse_search"].run(
             {
-                "db_path": f'{{"{db}"}},mode:"hybrid",query:"cross-paper insights about AI and computer science"',
+                "db_path": f'{{"{db}"}},mode:"research",query:"cross-paper insights about AI and computer science"',
             }
         )
 
         assert result["query"] == "cross-paper insights about AI and computer science"
-        assert result["mode"] == "hybrid"
+        assert result["mode"] == "research"
         assert result["database_path"] == str(db)
 
     anyio.run(exercise)
@@ -336,7 +336,7 @@ def test_search_simple_tool_normalizes_nested_mode_objects(monkeypatch, tmp_path
         )
 
         assert result["query"] == "signal"
-        assert result["mode"] == "hybrid"
+        assert result["mode"] == "research"
         assert result["database_path"] == str(db)
 
     anyio.run(exercise)
@@ -368,7 +368,7 @@ def test_search_for_workspace_tool_uses_current_handle(monkeypatch):
 
         assert captured["workspace"] == "current"
         assert result["query"] == "signal"
-        assert result["mode"] == "hybrid"
+        assert result["mode"] == "research"
         assert result["database_path"] == "/tmp/synapse.sqlite"
 
     anyio.run(exercise)

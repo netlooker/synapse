@@ -145,7 +145,7 @@ def run_smoke(
                 query=query_text,
                 config_path=config_path,
                 db_path=str(resolved_db),
-                mode="hybrid",
+                mode="research",
                 limit=limit,
             )
         )
@@ -207,7 +207,10 @@ def run_smoke(
             indexed_files=index.stats.total_files,
             indexed_chunks=index.stats.total_chunks,
             search_query=query_text,
-            top_search_paths=[item.path for item in search.results[:limit]],
+            top_search_paths=[
+                item.source_id or item.note_path or item.origin_url or item.direct_paper_url or (item.title or "")
+                for item in search.results[:limit]
+            ],
             discovery_count=len(discover.discoveries),
             broken_link_count=len(validate.broken_links),
             garden_status="passed",

@@ -95,6 +95,20 @@ class VectorStore(Protocol):
         commit: bool = True,
     ) -> int: ...
     def get_source_segments(self, source_row_id: int) -> list[dict[str, Any]]: ...
+    def search_segments_lexical(
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]: ...
+    def search_segments_vector(
+        self,
+        query_embedding: list[float],
+        *,
+        limit: int = 10,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]: ...
 
 
 class SQLiteVecStore:
@@ -201,6 +215,24 @@ class SQLiteVecStore:
 
     def get_source_segments(self, source_row_id: int) -> list[dict[str, Any]]:
         return self.backend.get_source_segments(source_row_id)
+
+    def search_segments_lexical(
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.backend.search_segments_lexical(query, limit=limit, filters=filters)
+
+    def search_segments_vector(
+        self,
+        query_embedding: list[float],
+        *,
+        limit: int = 10,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.backend.search_segments_vector(query_embedding, limit=limit, filters=filters)
 
 
 def create_vector_store(
