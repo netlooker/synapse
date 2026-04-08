@@ -241,7 +241,7 @@ def test_index_simple_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_pa
             database_path=request.db_path or "",
             note_provider="default",
             chunk_provider="contextual",
-            stats=IndexStats(total_files=5, indexed=5, unchanged=0, errors=0, total_chunks=12),
+            stats=IndexStats(total_files=5, indexed=5, unchanged=0, errors=0, total_segments=12),
         )
 
     monkeypatch.setattr("synapse.mcp_server.index_vault", fake_index_vault)
@@ -270,7 +270,7 @@ def test_index_for_workspace_tool_uses_current_handle(monkeypatch):
             database_path="/tmp/synapse.sqlite",
             note_provider="default",
             chunk_provider="contextual",
-            stats=IndexStats(total_files=5, indexed=5, unchanged=0, errors=0, total_chunks=12),
+            stats=IndexStats(total_files=5, indexed=5, unchanged=0, errors=0, total_segments=12),
         )
 
     monkeypatch.setattr("synapse.mcp_server.index_vault_for_workspace", fake_index_vault_for_workspace)

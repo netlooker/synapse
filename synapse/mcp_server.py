@@ -561,7 +561,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
             config_path=config_path,
         )
 
-    @mcp.tool(name="synapse_cipher_explain", description="Explain why two markdown documents are related")
+    @mcp.tool(name="synapse_cipher_explain", description="Explain why two knowledge entries are related")
     async def synapse_cipher_explain(
         doc_a: str,
         doc_b: str,

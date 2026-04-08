@@ -19,31 +19,6 @@ class VectorStore(Protocol):
     def close(self) -> None: ...
     def list_tables(self) -> list[str]: ...
     def vec_version(self) -> str | None: ...
-    def upsert_document(
-        self,
-        path: str,
-        content_hash: str,
-        title: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> int: ...
-    def get_document(self, path: str) -> dict[str, Any] | None: ...
-    def insert_chunk(
-        self,
-        doc_id: int,
-        chunk_index: int,
-        chunk_text: str,
-        embedding: list[float],
-        scope: str = "chunk",
-    ) -> int: ...
-    def search_similar(
-        self,
-        query_embedding: list[float],
-        limit: int = 10,
-        scope: str = "chunk",
-        include_paths: list[str] | None = None,
-    ) -> list[dict[str, Any]]: ...
-    def delete_chunks(self, doc_id: int) -> int: ...
-    def get_chunks(self, doc_id: int, scope: str | None = None) -> list[dict[str, Any]]: ...
     def upsert_bundle(
         self,
         bundle_id: str,
@@ -143,43 +118,6 @@ class SQLiteVecStore:
 
     def vec_version(self) -> str | None:
         return self.backend.vec_version()
-
-    def upsert_document(
-        self,
-        path: str,
-        content_hash: str,
-        title: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> int:
-        return self.backend.upsert_document(path, content_hash, title, metadata)
-
-    def get_document(self, path: str) -> dict[str, Any] | None:
-        return self.backend.get_document(path)
-
-    def insert_chunk(
-        self,
-        doc_id: int,
-        chunk_index: int,
-        chunk_text: str,
-        embedding: list[float],
-        scope: str = "chunk",
-    ) -> int:
-        return self.backend.insert_chunk(doc_id, chunk_index, chunk_text, embedding, scope)
-
-    def search_similar(
-        self,
-        query_embedding: list[float],
-        limit: int = 10,
-        scope: str = "chunk",
-        include_paths: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
-        return self.backend.search_similar(query_embedding, limit, scope, include_paths)
-
-    def delete_chunks(self, doc_id: int) -> int:
-        return self.backend.delete_chunks(doc_id)
-
-    def get_chunks(self, doc_id: int, scope: str | None = None) -> list[dict[str, Any]]:
-        return self.backend.get_chunks(doc_id, scope)
 
     def upsert_bundle(
         self,

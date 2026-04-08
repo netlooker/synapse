@@ -1,279 +1,120 @@
-"""
-Tests for synapse.db - Database setup and operations
-"""
-import sqlite3
+"""Tests for Synapse's source-first database layer."""
+
 import tempfile
 from pathlib import Path
 
-import pytest
-
 
 class TestDatabaseSetup:
-    """Test database initialization and schema creation."""
-
     def test_create_database_creates_file(self):
-        """Database file should be created on init."""
         from synapse.db import Database
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.sqlite"
             db = Database(db_path)
             db.initialize()
-            
+
             assert db_path.exists()
             db.close()
 
     def test_tables_are_created(self):
-        """All required tables should exist after init."""
         from synapse.db import Database
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.sqlite"
             db = Database(db_path)
             db.initialize()
-            
-            # Check tables exist
-            tables = db.list_tables()
-            assert "documents" in tables
-            assert "chunks" in tables
-            assert "discoveries" in tables
+
+            tables = set(db.list_tables())
+            assert {
+                "bundles",
+                "sources",
+                "notes",
+                "note_sources",
+                "segments",
+                "vec_segments",
+                "segments_fts",
+                "discoveries",
+            }.issubset(tables)
+            assert "documents" not in tables
+            assert "chunks" not in tables
+            assert "vec_chunks" not in tables
             db.close()
 
     def test_sqlite_vec_extension_loaded(self):
-        """sqlite-vec extension should be loaded and functional."""
         from synapse.db import Database
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "test.sqlite"
             db = Database(db_path)
             db.initialize()
-            
-            # Verify vec0 is available
+
             version = db.vec_version()
             assert version is not None
-            assert "v" in version  # e.g., "v0.1.6"
+            assert "v" in version
             db.close()
 
 
-class TestDocumentOperations:
-    """Test document CRUD operations."""
-
-    def test_insert_document(self):
-        """Should insert a document and return its ID."""
+class TestSourceCorpusOperations:
+    def test_bundle_source_note_and_lineage_round_trip(self):
         from synapse.db import Database
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path)
+            db = Database(Path(tmpdir) / "test.sqlite", embedding_dim=4)
             db.initialize()
-            
-            doc_id = db.upsert_document(
-                path="vault/entities/Test.md",
-                content_hash="abc123",
-                title="Test Entity"
+
+            bundle_row_id = db.upsert_bundle(
+                "bundle-1",
+                "hash-1",
+                artifact_path="/tmp/prepared_source_bundle.json",
+                metadata={"workspace": "research"},
+                artifact={"bundle_id": "bundle-1"},
+                commit=False,
             )
-            
-            assert doc_id is not None
-            assert doc_id > 0
-            db.close()
-
-    def test_get_document_by_path(self):
-        """Should retrieve document by path."""
-        from synapse.db import Database
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path)
-            db.initialize()
-            
-            db.upsert_document(
-                path="vault/entities/Test.md",
-                content_hash="abc123",
-                title="Test Entity"
+            source_row_id = db.insert_source(
+                bundle_row_id,
+                "source-1",
+                title="Weak Signals",
+                origin_url="https://example.com/origin",
+                direct_paper_url="https://example.com/paper.pdf",
+                authors=["Ada Lovelace"],
+                source_type="paper",
+                summary_text="Weak signals summary",
+                commit=False,
             )
-            
-            doc = db.get_document("vault/entities/Test.md")
-            assert doc is not None
-            assert doc["title"] == "Test Entity"
-            assert doc["content_hash"] == "abc123"
-            db.close()
-
-    def test_upsert_updates_existing(self):
-        """Upsert should update hash if document exists."""
-        from synapse.db import Database
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path)
-            db.initialize()
-            
-            # Insert
-            doc_id1 = db.upsert_document(
-                path="vault/entities/Test.md",
-                content_hash="abc123",
-                title="Test Entity"
+            note_id = db.insert_note(
+                note_path="notes/weak-signals.md",
+                title="Weak Signals",
+                body_text="# Weak Signals\n\nA linked research note.",
+                note_kind="research",
+                metadata={"bundle_id": "bundle-1", "source_id": "source-1"},
+                commit=False,
             )
-            
-            # Update
-            doc_id2 = db.upsert_document(
-                path="vault/entities/Test.md",
-                content_hash="def456",
-                title="Test Entity Updated"
-            )
-            
-            assert doc_id1 == doc_id2  # Same document
-            
-            doc = db.get_document("vault/entities/Test.md")
-            assert doc["content_hash"] == "def456"
-            assert doc["title"] == "Test Entity Updated"
+            db.link_note_source(note_id, source_row_id, metadata={"linked_via": "frontmatter"}, commit=False)
+            db.conn.commit()
+
+            bundle = db.get_bundle("bundle-1")
+            source = db.get_source("bundle-1", "source-1")
+            note = db.get_note("notes/weak-signals.md")
+            link = db.conn.execute(
+                "SELECT metadata_json FROM note_sources WHERE note_id = ? AND source_row_id = ?",
+                (note_id, source_row_id),
+            ).fetchone()
+
+            assert bundle is not None
+            assert bundle["artifact_path"] == "/tmp/prepared_source_bundle.json"
+            assert source is not None
+            assert source["title"] == "Weak Signals"
+            assert source["authors"] == ["Ada Lovelace"]
+            assert note is not None
+            assert note["metadata"]["bundle_id"] == "bundle-1"
+            assert link is not None
             db.close()
 
-
-class TestChunkOperations:
-    """Test chunk storage and vector search."""
-
-    def test_insert_chunk_with_embedding(self):
-        """Should insert a chunk with its embedding."""
-        from synapse.db import Database
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path)
-            db.initialize()
-            
-            doc_id = db.upsert_document(
-                path="vault/entities/Test.md",
-                content_hash="abc123",
-                title="Test"
-            )
-            
-            # Fake 768-dim embedding
-            embedding = [0.1] * 768
-            
-            chunk_id = db.insert_chunk(
-                doc_id=doc_id,
-                chunk_index=0,
-                chunk_text="This is test content.",
-                embedding=embedding
-            )
-            
-            assert chunk_id is not None
-            assert chunk_id > 0
-            db.close()
-
-    def test_vector_search_returns_similar(self):
-        """Vector search should return similar chunks."""
-        from synapse.db import Database
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path)
-            db.initialize()
-            
-            # Insert two documents with different embeddings
-            doc1_id = db.upsert_document("doc1.md", "hash1", "Doc 1")
-            doc2_id = db.upsert_document("doc2.md", "hash2", "Doc 2")
-            
-            # Similar embeddings (small difference)
-            emb1 = [0.1] * 768
-            emb2 = [0.1] * 767 + [0.2]  # Slightly different
-            emb3 = [0.9] * 768  # Very different
-            
-            db.insert_chunk(doc1_id, 0, "Content about Elixir", emb1)
-            db.insert_chunk(doc1_id, 1, "More Elixir content", emb2)
-            db.insert_chunk(doc2_id, 0, "Unrelated content", emb3)
-            
-            # Search with emb1 - should find emb2 as similar
-            results = db.search_similar(emb1, limit=2)
-            
-            assert len(results) >= 1
-            assert all(0.0 <= row["similarity"] <= 1.0 for row in results)
-            # First result should be exact match or very similar
-            db.close()
-
-    def test_delete_chunks_for_document(self):
-        """Should delete all chunks when re-indexing a document."""
-        from synapse.db import Database
-        
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path)
-            db.initialize()
-            
-            doc_id = db.upsert_document("test.md", "hash1", "Test")
-            embedding = [0.1] * 768
-            
-            db.insert_chunk(doc_id, 0, "Chunk 1", embedding)
-            db.insert_chunk(doc_id, 1, "Chunk 2", embedding)
-            
-            # Delete chunks for re-indexing
-            deleted = db.delete_chunks(doc_id)
-            assert deleted == 2
-            
-            # Verify chunks are gone
-            chunks = db.get_chunks(doc_id)
-            assert len(chunks) == 0
-            db.close()
-
-    def test_vector_search_can_filter_by_scope(self):
-        """Search should be able to target note or chunk embeddings separately."""
-        from synapse.db import Database
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path, embedding_dim=4)
-            db.initialize()
-
-            doc_id = db.upsert_document("doc1.md", "hash1", "Doc 1")
-            embedding = [0.1, 0.1, 0.1, 0.1]
-
-            db.insert_chunk(doc_id, 0, "Document level summary", embedding, scope="note")
-            db.insert_chunk(doc_id, 0, "Section chunk", embedding, scope="chunk")
-
-            note_results = db.search_similar(embedding, limit=5, scope="note")
-            chunk_results = db.search_similar(embedding, limit=5, scope="chunk")
-
-            assert len(note_results) == 1
-            assert len(chunk_results) == 1
-            assert note_results[0]["chunk_text"] == "Document level summary"
-            assert chunk_results[0]["chunk_text"] == "Section chunk"
-            db.close()
-
-    def test_vector_search_can_filter_by_candidate_paths(self):
-        """Search should be able to constrain results to coarse retrieval candidates."""
-        from synapse.db import Database
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path, embedding_dim=4)
-            db.initialize()
-
-            doc1_id = db.upsert_document("vault/a.md", "hash1", "Doc A")
-            doc2_id = db.upsert_document("vault/b.md", "hash2", "Doc B")
-            embedding = [0.1, 0.1, 0.1, 0.1]
-
-            db.insert_chunk(doc1_id, 0, "Candidate chunk", embedding, scope="chunk")
-            db.insert_chunk(doc2_id, 0, "Excluded chunk", embedding, scope="chunk")
-
-            results = db.search_similar(
-                embedding,
-                limit=5,
-                scope="chunk",
-                include_paths=["vault/b.md"],
-            )
-
-            assert len(results) == 1
-            assert results[0]["path"] == "vault/b.md"
-            db.close()
-
-
-class TestSourceFirstSearchOperations:
     def test_segment_search_supports_lexical_and_vector_queries(self):
         from synapse.db import Database
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            db_path = Path(tmpdir) / "test.sqlite"
-            db = Database(db_path, embedding_dim=4)
+            db = Database(Path(tmpdir) / "test.sqlite", embedding_dim=4)
             db.initialize()
 
             bundle_row_id = db.upsert_bundle("bundle-1", "hash-1", commit=False)
@@ -313,4 +154,66 @@ class TestSourceFirstSearchOperations:
             assert lexical[0]["title"] == "Weak Signals"
             assert len(vector) == 1
             assert vector[0]["vector_score"] is not None
+            db.close()
+
+    def test_delete_note_removes_segments(self):
+        from synapse.db import Database
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = Database(Path(tmpdir) / "test.sqlite", embedding_dim=4)
+            db.initialize()
+
+            note_id = db.insert_note(
+                note_path="notes/test.md",
+                title="Test",
+                body_text="Body",
+                commit=False,
+            )
+            db.insert_segment(
+                owner_kind="note",
+                owner_id=note_id,
+                note_row_id=note_id,
+                content_role="note_body",
+                segment_index=0,
+                text="Body",
+                embedding=[0.2, 0.2, 0.2, 0.2],
+                commit=False,
+            )
+            db.conn.commit()
+
+            deleted = db.delete_note(note_id)
+            remaining = db.conn.execute("SELECT COUNT(*) FROM segments").fetchone()[0]
+
+            assert deleted == 1
+            assert remaining == 0
+            db.close()
+
+    def test_delete_bundle_removes_source_segments(self):
+        from synapse.db import Database
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = Database(Path(tmpdir) / "test.sqlite", embedding_dim=4)
+            db.initialize()
+
+            bundle_row_id = db.upsert_bundle("bundle-1", "hash-1", commit=False)
+            source_row_id = db.insert_source(bundle_row_id, "source-1", title="Source", commit=False)
+            db.insert_segment(
+                owner_kind="source",
+                owner_id=source_row_id,
+                source_row_id=source_row_id,
+                content_role="full_text",
+                segment_index=0,
+                text="Primary text",
+                embedding=[0.3, 0.3, 0.3, 0.3],
+                commit=False,
+            )
+            db.conn.commit()
+
+            deleted = db.delete_bundle("bundle-1")
+            remaining_sources = db.conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+            remaining_segments = db.conn.execute("SELECT COUNT(*) FROM segments").fetchone()[0]
+
+            assert deleted == 1
+            assert remaining_sources == 0
+            assert remaining_segments == 0
             db.close()

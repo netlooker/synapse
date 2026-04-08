@@ -250,8 +250,8 @@ Current limitations:
 Current operational details:
 
 - service-backed discovery defaults to `0.20`, while the standalone CLI currently defaults to `0.65`; set the threshold explicitly when you need repeatable behavior across surfaces
-- reindexing is path-based: unchanged files are skipped by content hash, and changed files replace the stored chunks for that document
-- reusing one SQLite DB across different vault roots can leave stale documents behind, because indexing updates by stored path and does not currently prune documents that disappeared under an older root
+- reindexing is path-based: unchanged files are skipped by content hash, and changed files replace the stored note segments for that path
+- reusing one SQLite DB across different vault roots can leave stale entries behind, because indexing updates by stored path and does not currently prune paths that disappeared under an older root
 - `Cipher` audit is deterministic, while explanation, chunking advice, and stub review are model-backed
 
 ## Development

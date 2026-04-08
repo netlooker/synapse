@@ -78,7 +78,7 @@ Current behavior:
 
 - scans markdown files for broken wikilinks
 - suggests `repair_links` when broken links exist
-- suggests `reindex_documents` when the configured DB path does not exist
+- suggests `reindex_corpus` when the configured DB path does not exist
 - does not currently perform repair actions, even when `mode` is `"repair"`
 
 Output:
@@ -93,10 +93,10 @@ Output:
       "target_link": "Bar"
     }
   ],
-  "stale_documents": [],
+  "stale_entries": [],
   "suggested_actions": [
     "repair_links",
-    "reindex_documents"
+    "reindex_corpus"
   ]
 }
 ```

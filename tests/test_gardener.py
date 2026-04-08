@@ -12,12 +12,22 @@ from synapse.settings import load_settings
 def _seed_broken_link_db(db_path: Path) -> None:
     db = Database(db_path, embedding_dim=4)
     db.initialize()
-    doc_id = db.upsert_document("vault/source.md", "hash:source", "Source")
-    db.insert_chunk(
-        doc_id,
-        0,
-        "# Source\n\nLinks to [[Semantic Memory]] and [[x]]",
-        [1.0, 0.0, 0.0, 0.0],
+    note_id = db.insert_note(
+        note_path="source.md",
+        title="Source",
+        body_text="# Source\n\nLinks to [[Semantic Memory]] and [[x]]",
+        content_hash="hash:source",
+        commit=False,
+    )
+    db.insert_segment(
+        owner_kind="note",
+        owner_id=note_id,
+        note_row_id=note_id,
+        content_role="note_body",
+        segment_index=0,
+        text="# Source\n\nLinks to [[Semantic Memory]] and [[x]]",
+        embedding=[1.0, 0.0, 0.0, 0.0],
+        commit=False,
     )
     db.conn.commit()
     db.close()

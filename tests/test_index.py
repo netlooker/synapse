@@ -317,7 +317,7 @@ This is a test entity about programming.
             # Index
             stats = indexer.index_file(test_file)
             
-            assert stats["chunks_created"] > 0
+            assert stats["segments_created"] > 0
             
             note = db.get_note(str(test_file.relative_to(vault_root)))
             assert note is not None
@@ -391,7 +391,7 @@ This section explains hidden links between notes.
                 (note["id"],),
             ).fetchall()
 
-            assert stats["chunks_created"] >= 2
+            assert stats["segments_created"] >= 2
             assert len(segments) >= 2
             assert all(row["content_role"] == "note_body" for row in segments)
             db.close()

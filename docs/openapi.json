@@ -13,11 +13,11 @@
             "title": "Broken Links",
             "type": "array"
           },
-          "stale_documents": {
+          "stale_entries": {
             "items": {
               "type": "string"
             },
-            "title": "Stale Documents",
+            "title": "Stale Entries",
             "type": "array"
           },
           "status": {
@@ -645,12 +645,12 @@
             "title": "Indexed",
             "type": "integer"
           },
-          "total_chunks": {
-            "title": "Total Chunks",
-            "type": "integer"
-          },
           "total_files": {
             "title": "Total Files",
+            "type": "integer"
+          },
+          "total_segments": {
+            "title": "Total Segments",
             "type": "integer"
           },
           "unchanged": {
@@ -663,7 +663,7 @@
           "indexed",
           "unchanged",
           "errors",
-          "total_chunks"
+          "total_segments"
         ],
         "title": "IndexStats",
         "type": "object"
@@ -759,7 +759,7 @@
       },
       "SearchRequest": {
         "properties": {
-          "chunk_provider": {
+          "bundle_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -768,7 +768,7 @@
                 "type": "null"
               }
             ],
-            "title": "Chunk Provider"
+            "title": "Bundle Id"
           },
           "config_path": {
             "anyOf": [
@@ -804,16 +804,17 @@
             "title": "Limit"
           },
           "mode": {
-            "default": "hybrid",
+            "default": "research",
             "enum": [
+              "source",
               "note",
-              "chunk",
-              "hybrid"
+              "evidence",
+              "research"
             ],
             "title": "Mode",
             "type": "string"
           },
-          "note_provider": {
+          "provider": {
             "anyOf": [
               {
                 "type": "string"
@@ -822,11 +823,33 @@
                 "type": "null"
               }
             ],
-            "title": "Note Provider"
+            "title": "Provider"
           },
           "query": {
             "title": "Query",
             "type": "string"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Type"
           }
         },
         "required": [
@@ -867,7 +890,7 @@
       },
       "SearchResult": {
         "properties": {
-          "chunk_similarity": {
+          "bm25_score": {
             "anyOf": [
               {
                 "type": "number"
@@ -876,52 +899,117 @@
                 "type": "null"
               }
             ],
-            "title": "Chunk Similarity"
+            "title": "Bm25 Score"
           },
-          "metadata_boost": {
+          "bundle_id": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Metadata Boost"
+            "title": "Bundle Id"
           },
-          "note_similarity": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note Similarity"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "similarity": {
-            "title": "Similarity",
+          "combined_score": {
+            "title": "Combined Score",
             "type": "number"
           },
-          "snippet": {
-            "title": "Snippet",
+          "direct_paper_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direct Paper Url"
+          },
+          "matched_content_role": {
+            "title": "Matched Content Role",
             "type": "string"
           },
-          "title": {
-            "title": "Title",
+          "matched_segment_text": {
+            "title": "Matched Segment Text",
             "type": "string"
+          },
+          "note_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Path"
+          },
+          "origin_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin Url"
+          },
+          "rank_reason": {
+            "title": "Rank Reason",
+            "type": "string"
+          },
+          "result_kind": {
+            "enum": [
+              "source",
+              "note",
+              "evidence"
+            ],
+            "title": "Result Kind",
+            "type": "string"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "vector_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vector Score"
           }
         },
         "required": [
-          "path",
-          "title",
-          "similarity",
-          "snippet"
+          "result_kind",
+          "matched_content_role",
+          "matched_segment_text",
+          "combined_score",
+          "rank_reason"
         ],
         "title": "SearchResult",
         "type": "object"

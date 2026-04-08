@@ -1,8 +1,4 @@
-"""
-synapse.db - Database operations with vector search
-
-Uses sqlite-vec extension when available.
-"""
+"""Database operations for Synapse's source-first research corpus."""
 import json
 import sqlite3
 import struct
@@ -44,58 +40,6 @@ class Database:
     def _create_schema(self) -> None:
         """Create all required tables."""
         cur = self.conn.cursor()
-        
-        # Documents table
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY,
-                path TEXT UNIQUE NOT NULL,
-                content_hash TEXT NOT NULL,
-                title TEXT,
-                tags_json TEXT NOT NULL DEFAULT '[]',
-                wikilinks_json TEXT NOT NULL DEFAULT '[]',
-                frontmatter_json TEXT NOT NULL DEFAULT '{}',
-                indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        document_columns = {
-            row["name"]
-            for row in cur.execute("PRAGMA table_info(documents)").fetchall()
-        }
-        if "tags_json" not in document_columns:
-            cur.execute("ALTER TABLE documents ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'")
-        if "wikilinks_json" not in document_columns:
-            cur.execute("ALTER TABLE documents ADD COLUMN wikilinks_json TEXT NOT NULL DEFAULT '[]'")
-        if "frontmatter_json" not in document_columns:
-            cur.execute("ALTER TABLE documents ADD COLUMN frontmatter_json TEXT NOT NULL DEFAULT '{}'")
-        
-        # Chunks table (metadata)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS chunks (
-                id INTEGER PRIMARY KEY,
-                doc_id INTEGER NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-                chunk_index INTEGER NOT NULL,
-                chunk_text TEXT NOT NULL,
-                scope TEXT NOT NULL DEFAULT 'chunk'
-            )
-        """)
-
-        chunk_columns = {
-            row["name"]
-            for row in cur.execute("PRAGMA table_info(chunks)").fetchall()
-        }
-        if "scope" not in chunk_columns:
-            cur.execute("ALTER TABLE chunks ADD COLUMN scope TEXT NOT NULL DEFAULT 'chunk'")
-
-        # Vector table (sqlite-vec)
-        # We use a separate virtual table linked by rowid (chunk_id)
-        cur.execute(f"""
-            CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks USING vec0(
-                chunk_id INTEGER PRIMARY KEY,
-                embedding float[{self.embedding_dim}]
-            )
-        """)
 
         # Source-first research corpus tables.
         cur.execute("""
@@ -204,10 +148,6 @@ class Database:
             )
         """)
         
-        # Create index for faster lookups
-        cur.execute("""
-            CREATE INDEX IF NOT EXISTS idx_chunks_doc_id ON chunks(doc_id)
-        """)
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_sources_bundle_row_id ON sources(bundle_row_id)
         """)
@@ -247,60 +187,6 @@ class Database:
             return cur.fetchone()[0]
         except Exception:
             return "unknown"
-
-    def upsert_document(
-        self, 
-        path: str, 
-        content_hash: str, 
-        title: str | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> int:
-        """Insert or update a document, returning its ID."""
-        cur = self.conn.cursor()
-        metadata = metadata or {}
-        tags_json = json.dumps(metadata.get("tags", []), sort_keys=True)
-        wikilinks_json = json.dumps(metadata.get("wikilinks", []), sort_keys=True)
-        frontmatter_json = json.dumps(metadata.get("frontmatter", {}), sort_keys=True)
-        
-        # Try to get existing
-        cur.execute("SELECT id FROM documents WHERE path = ?", (path,))
-        existing = cur.fetchone()
-        
-        if existing:
-            # Update
-            cur.execute("""
-                UPDATE documents 
-                SET content_hash = ?, title = ?, tags_json = ?, wikilinks_json = ?, frontmatter_json = ?, indexed_at = CURRENT_TIMESTAMP
-                WHERE path = ?
-            """, (content_hash, title, tags_json, wikilinks_json, frontmatter_json, path))
-            doc_id = existing[0]
-        else:
-            # Insert
-            cur.execute("""
-                INSERT INTO documents (path, content_hash, title, tags_json, wikilinks_json, frontmatter_json)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (path, content_hash, title, tags_json, wikilinks_json, frontmatter_json))
-            doc_id = cur.lastrowid
-        
-        self.conn.commit()
-        return doc_id
-
-    def get_document(self, path: str) -> dict[str, Any] | None:
-        """Get document by path."""
-        cur = self.conn.cursor()
-        cur.execute("""
-            SELECT id, path, content_hash, title, tags_json, wikilinks_json, frontmatter_json, indexed_at
-            FROM documents WHERE path = ?
-        """, (path,))
-        row = cur.fetchone()
-        
-        if row:
-            doc = dict(row)
-            doc["tags"] = _json_load(doc.pop("tags_json"), [])
-            doc["wikilinks"] = _json_load(doc.pop("wikilinks_json"), [])
-            doc["frontmatter"] = _json_load(doc.pop("frontmatter_json"), {})
-            return doc
-        return None
 
     def upsert_bundle(
         self,
@@ -702,140 +588,6 @@ class Database:
             ORDER BY distance
         """, params).fetchall()
         return [_segment_search_row(dict(row), lexical=False) for row in rows]
-
-    def insert_chunk(
-        self,
-        doc_id: int,
-        chunk_index: int,
-        chunk_text: str,
-        embedding: list[float],
-        scope: str = "chunk",
-    ) -> int:
-        """Insert a chunk with its embedding."""
-        cur = self.conn.cursor()
-        
-        # 1. Insert metadata into chunks table
-        cur.execute("""
-            INSERT INTO chunks (doc_id, chunk_index, chunk_text, scope)
-            VALUES (?, ?, ?, ?)
-        """, (doc_id, chunk_index, chunk_text, scope))
-        chunk_id = cur.lastrowid
-        
-        # 2. Insert embedding into vector table
-        # sqlite-vec expects raw bytes for float array if passed as param, 
-        # or use vec_f32() function? No, with bindings we usually pass bytes or list.
-        # Let's try passing the serialized bytes which works for most sqlite bindings.
-        embedding_blob = _serialize_f32(embedding)
-        
-        cur.execute("""
-            INSERT INTO vec_chunks (chunk_id, embedding)
-            VALUES (?, ?)
-        """, (chunk_id, embedding_blob))
-        
-        self.conn.commit()
-        return chunk_id
-
-    def search_similar(
-        self, 
-        query_embedding: list[float], 
-        limit: int = 10,
-        scope: str = "chunk",
-        include_paths: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Find similar chunks by vector similarity using sqlite-vec."""
-        cur = self.conn.cursor()
-        
-        embedding_blob = _serialize_f32(query_embedding)
-        filters = ["c.scope = ?", "embedding MATCH ?", "k = ?"]
-        params: list[Any] = [scope, embedding_blob, limit]
-        if include_paths:
-            placeholders = ", ".join("?" for _ in include_paths)
-            filters.append(f"d.path IN ({placeholders})")
-            params.extend(include_paths)
-        
-        # KNN Search using vec0 virtual table
-        cur.execute(f"""
-            SELECT 
-                c.id as chunk_id,
-                c.chunk_text,
-                c.doc_id,
-                d.path,
-                d.title,
-                d.tags_json,
-                d.wikilinks_json,
-                d.frontmatter_json,
-                distance
-            FROM vec_chunks v
-            JOIN chunks c ON c.id = v.chunk_id
-            JOIN documents d ON d.id = c.doc_id
-            WHERE {" AND ".join(filters)}
-            ORDER BY distance
-        """, params)
-        
-        results = []
-        for row in cur.fetchall():
-            distance = row["distance"]
-            # sqlite-vec returns a distance value. Convert that into a bounded
-            # relevance score for display purposes instead of assuming cosine.
-            similarity = 1.0 / (1.0 + max(distance, 0.0))
-            
-            results.append({
-                "chunk_id": row["chunk_id"],
-                "distance": distance,
-                "similarity": similarity,
-                "chunk_text": row["chunk_text"],
-                "doc_id": row["doc_id"],
-                "path": row["path"],
-                "title": row["title"],
-                "tags": _json_load(row["tags_json"], []),
-                "wikilinks": _json_load(row["wikilinks_json"], []),
-                "frontmatter": _json_load(row["frontmatter_json"], {}),
-                "scope": scope,
-            })
-        
-        return results
-
-    def delete_chunks(self, doc_id: int) -> int:
-        """Delete all chunks for a document."""
-        cur = self.conn.cursor()
-        
-        # Get chunk IDs to delete from vector table
-        cur.execute("SELECT id FROM chunks WHERE doc_id = ?", (doc_id,))
-        chunk_ids = [row[0] for row in cur.fetchall()]
-        
-        if not chunk_ids:
-            return 0
-            
-        # Delete metadata
-        cur.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
-        deleted = cur.rowcount
-        
-        # Delete vectors (manually, since no cascade on virtual tables usually)
-        # Using IN clause for vector table might be slow or unsupported?
-        # vec0 supports DELETE WHERE rowid = ?
-        for cid in chunk_ids:
-             cur.execute("DELETE FROM vec_chunks WHERE chunk_id = ?", (cid,))
-
-        self.conn.commit()
-        return deleted
-
-    def get_chunks(self, doc_id: int, scope: str | None = None) -> list[dict[str, Any]]:
-        """Get all chunks for a document."""
-        cur = self.conn.cursor()
-        if scope is None:
-            cur.execute("""
-                SELECT id, chunk_index, chunk_text, scope
-                FROM chunks WHERE doc_id = ?
-                ORDER BY scope, chunk_index
-            """, (doc_id,))
-        else:
-            cur.execute("""
-                SELECT id, chunk_index, chunk_text, scope
-                FROM chunks WHERE doc_id = ? AND scope = ?
-                ORDER BY chunk_index
-            """, (doc_id, scope))
-        
-        return [dict(row) for row in cur.fetchall()]
 
     def _extension_candidates(self) -> list[Path | str]:
         candidates: list[Path | str] = []

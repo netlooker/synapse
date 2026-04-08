@@ -221,7 +221,7 @@ What it does:
 Important behavior:
 
 - the smoke command refuses to reuse an existing DB path unless `--reuse-db` is passed
-- this avoids stale documents when a DB has been reused across different vault roots
+- this avoids stale entries when a DB has been reused across different vault roots
 
 ## Minimal Commands
 

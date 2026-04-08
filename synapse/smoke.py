@@ -45,7 +45,7 @@ class SmokeResult:
     used_temporary_db: bool
     health_ready: bool
     indexed_files: int
-    indexed_chunks: int
+    indexed_segments: int
     search_query: str
     top_search_paths: list[str]
     discovery_count: int
@@ -205,7 +205,7 @@ def run_smoke(
             used_temporary_db=used_temporary_db,
             health_ready=health.ready_for_indexing,
             indexed_files=index.stats.total_files,
-            indexed_chunks=index.stats.total_chunks,
+            indexed_segments=index.stats.total_segments,
             search_query=query_text,
             top_search_paths=[
                 item.source_id or item.note_path or item.origin_url or item.direct_paper_url or (item.title or "")
@@ -314,7 +314,7 @@ def main() -> None:
     print()
     print("✅ Index")
     print(f"   Files: {result.indexed_files}")
-    print(f"   Chunks: {result.indexed_chunks}")
+    print(f"   Segments: {result.indexed_segments}")
     print()
     print("✅ Search")
     print(f"   Query: {result.search_query}")

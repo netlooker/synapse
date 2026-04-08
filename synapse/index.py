@@ -511,7 +511,7 @@ class Indexer:
             return {
                 "status": "unchanged",
                 "path": rel_path,
-                "chunks_created": 0
+                "segments_created": 0
             }
         
         metadata = extract_document_metadata(content)
@@ -548,7 +548,7 @@ class Indexer:
                     )
 
             chunks = chunk_markdown(content, self.chunking_config)
-            chunks_created = 0
+            segments_created = 0
             embeddings = self.chunk_embedder.embed_document_chunks(
                 chunks,
                 document_title=title,
@@ -574,7 +574,7 @@ class Indexer:
                     },
                     commit=False,
                 )
-                chunks_created += 1
+                segments_created += 1
 
             self.db.conn.commit()
         except Exception:
@@ -585,7 +585,7 @@ class Indexer:
             "status": "indexed",
             "path": rel_path,
             "title": title,
-            "chunks_created": chunks_created
+            "segments_created": segments_created
         }
 
     def index_all(self) -> dict[str, Any]:
@@ -604,7 +604,7 @@ class Indexer:
             "indexed": 0,
             "unchanged": 0,
             "errors": 0,
-            "total_chunks": 0
+            "total_segments": 0
         }
         
         for file_path in files:
@@ -613,7 +613,7 @@ class Indexer:
                 
                 if result["status"] == "indexed":
                     stats["indexed"] += 1
-                    stats["total_chunks"] += result["chunks_created"]
+                    stats["total_segments"] += result["segments_created"]
                 else:
                     stats["unchanged"] += 1
                     
@@ -735,7 +735,7 @@ def main():
     print(f"   Files: {stats['total_files']}")
     print(f"   Indexed: {stats['indexed']}")
     print(f"   Unchanged: {stats['unchanged']}")
-    print(f"   Chunks: {stats['total_chunks']}")
+    print(f"   Segments: {stats['total_segments']}")
     if stats['errors'] > 0:
         print(f"   ⚠️  Errors: {stats['errors']}")
     

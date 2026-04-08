@@ -9,41 +9,32 @@ from .vector_store import VectorStore, create_vector_store
 
 @dataclass
 class BrokenLink:
-    """A link that points to a non-existent document."""
+    """A link that points to a non-existent note."""
     source_path: str
     target_link: str
 
 def find_broken_links(db: VectorStore) -> list[BrokenLink]:
-    """
-    Scan indexed notes, with legacy document fallback during the transition.
-    """
+    """Scan indexed notes for broken wikilinks."""
     valid_targets: Set[str] = set()
-    rows = []
-    if _table_exists(db, "notes"):
-        rows.extend(
-            ("note", row["note_path"], row["title"])
-            for row in db.conn.execute("SELECT note_path, title FROM notes").fetchall()
-        )
-    if _table_exists(db, "documents"):
-        rows.extend(
-            ("document", row["path"], row["title"])
-            for row in db.conn.execute("SELECT path, title FROM documents").fetchall()
-        )
+    rows = [
+        (row["note_path"], row["title"])
+        for row in db.conn.execute("SELECT note_path, title FROM notes").fetchall()
+    ]
 
     docs = []
-    for kind, path, title in rows:
+    for path, title in rows:
         valid_targets.add(path)
         if title:
             valid_targets.add(title)
 
         stem = path.split("/")[-1].replace(".md", "")
         valid_targets.add(stem)
-        docs.append((kind, path, title))
+        docs.append((path, title))
 
     broken_links = []
 
-    for kind, path, title in docs:
-        content = _get_note_content(db, path) if kind == "note" else _get_document_content(db, path)
+    for path, title in docs:
+        content = _get_note_content(db, path)
         links = extract_wikilinks(content)
 
         for link in links:
@@ -62,29 +53,6 @@ def _get_note_content(db: VectorStore, note_path: str) -> str:
     if not row:
         return ""
     return str(row[0] or "")
-
-
-def _get_document_content(db: VectorStore, doc_path: str) -> str:
-    row = db.conn.execute(
-        "SELECT id FROM documents WHERE path = ?",
-        (doc_path,),
-    ).fetchone()
-    if not row:
-        return ""
-    chunks = db.conn.execute(
-        "SELECT chunk_text FROM chunks WHERE doc_id = ? AND scope = 'chunk' ORDER BY chunk_index",
-        (row[0],),
-    ).fetchall()
-    return "\n".join(content for (content,) in chunks)
-
-
-def _table_exists(db: VectorStore, table_name: str) -> bool:
-    row = db.conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
-        (table_name,),
-    ).fetchone()
-    return row is not None
-
 def main():
     """CLI entry point for validation."""
     import argparse

@@ -394,10 +394,10 @@ Reindex behavior today:
 
 - files are tracked by relative path within the configured markdown root
 - unchanged files are skipped by content hash
-- changed files update the document record, delete the previous stored chunks for that path, and insert fresh note and chunk rows
-- reusing the same SQLite DB across different markdown roots can leave stale documents from the old root behind, because missing old paths are not pruned automatically
+- changed files update the note record, replace the previous stored note segments for that path, and insert fresh note rows plus note-body segments
+- reusing the same SQLite DB across different markdown roots can leave stale entries from the old root behind, because missing old paths are not pruned automatically
 - chunk identity across repeated reindex runs is replacement-based today; finer-grained repair policy is still a future improvement
-- for clean end-to-end runs, prefer a fresh DB per vault root or explicitly remove stale documents before reusing a shared DB
+- for clean end-to-end runs, prefer a fresh DB per vault root or explicitly remove stale entries before reusing a shared DB
 
 ### Search
 

@@ -66,7 +66,7 @@ def _patch_smoke_dependencies(monkeypatch):
             database_path=request.db_path or "db.sqlite",
             note_provider="default",
             chunk_provider="contextual",
-            stats=IndexStats(total_files=8, indexed=8, unchanged=0, errors=0, total_chunks=8),
+            stats=IndexStats(total_files=8, indexed=8, unchanged=0, errors=0, total_segments=8),
         ),
     )
     monkeypatch.setattr(
@@ -155,6 +155,7 @@ def test_run_smoke_uses_temp_db_and_skips_cipher_by_default(monkeypatch):
 
     assert result.used_temporary_db is True
     assert result.indexed_files == 8
+    assert result.indexed_segments == 8
     assert result.discovery_count == 1
     assert result.broken_link_count == 0
     assert result.cipher_status == "skipped"

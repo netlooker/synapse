@@ -74,7 +74,7 @@ class IndexStats(BaseModel):
     indexed: int
     unchanged: int
     errors: int
-    total_chunks: int
+    total_segments: int
 
 
 class IndexResponse(BaseModel):

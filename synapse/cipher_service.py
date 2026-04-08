@@ -67,7 +67,7 @@ class AuditVaultResponse(BaseModel):
     status: str = "ok"
     summary: str
     broken_links: list[dict[str, str]] = Field(default_factory=list)
-    stale_documents: list[str] = Field(default_factory=list)
+    stale_entries: list[str] = Field(default_factory=list)
     suggested_actions: list[str] = Field(default_factory=list)
 
 
@@ -141,7 +141,7 @@ class CipherService:
         if broken_links:
             suggested_actions.append("repair_links")
         if deps.synapse_db and not deps.synapse_db.exists():
-            suggested_actions.append("reindex_documents")
+            suggested_actions.append("reindex_corpus")
 
         summary = "Vault audit complete."
         if broken_links:
@@ -152,13 +152,13 @@ class CipherService:
         return AuditVaultResponse(
             summary=summary,
             broken_links=broken_links,
-            stale_documents=[],
+            stale_entries=[],
             suggested_actions=suggested_actions,
         )
 
     async def _explain_connection(self, request: ExplainConnectionRequest) -> ExplainConnectionResponse:
         prompt = (
-            f"Explain why the markdown documents '{request.doc_a}' and '{request.doc_b}' are related. "
+            f"Explain why the knowledge entries '{request.doc_a}' and '{request.doc_b}' are related. "
             "Keep the answer short and concrete."
         )
         result = await self._run_reasoning(
