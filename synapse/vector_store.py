@@ -80,6 +80,8 @@ class VectorStore(Protocol):
         commit: bool = True,
     ) -> int: ...
     def get_source(self, bundle_id: str, source_id: str) -> dict[str, Any] | None: ...
+    def get_note(self, note_path: str) -> dict[str, Any] | None: ...
+    def delete_note(self, note_id: int, *, commit: bool = True) -> int: ...
     def insert_segment(
         self,
         *,
@@ -209,6 +211,12 @@ class SQLiteVecStore:
 
     def get_source(self, bundle_id: str, source_id: str) -> dict[str, Any] | None:
         return self.backend.get_source(bundle_id, source_id)
+
+    def get_note(self, note_path: str) -> dict[str, Any] | None:
+        return self.backend.get_note(note_path)
+
+    def delete_note(self, note_id: int, *, commit: bool = True) -> int:
+        return self.backend.delete_note(note_id, commit=commit)
 
     def insert_segment(self, **kwargs: Any) -> int:
         return self.backend.insert_segment(**kwargs)

@@ -15,57 +15,75 @@ class BrokenLink:
 
 def find_broken_links(db: VectorStore) -> list[BrokenLink]:
     """
-    Scan all documents for broken wikilinks.
+    Scan indexed notes, with legacy document fallback during the transition.
     """
-    # 1. Get all valid titles and paths
     valid_targets: Set[str] = set()
-    
-    rows = db.conn.execute("SELECT path, title FROM documents").fetchall()
-    
+    rows = []
+    if _table_exists(db, "notes"):
+        rows.extend(
+            ("note", row["note_path"], row["title"])
+            for row in db.conn.execute("SELECT note_path, title FROM notes").fetchall()
+        )
+    if _table_exists(db, "documents"):
+        rows.extend(
+            ("document", row["path"], row["title"])
+            for row in db.conn.execute("SELECT path, title FROM documents").fetchall()
+        )
+
     docs = []
-    for path, title in rows:
+    for kind, path, title in rows:
         valid_targets.add(path)
         if title:
             valid_targets.add(title)
-        
-        # Also allow linking by filename stem
+
         stem = path.split("/")[-1].replace(".md", "")
         valid_targets.add(stem)
-        
-        docs.append((path, title))
+        docs.append((kind, path, title))
 
-    # 2. Scan content for links
     broken_links = []
-    
-    for path, title in docs:
-        content = _get_document_content(db, path)
+
+    for kind, path, title in docs:
+        content = _get_note_content(db, path) if kind == "note" else _get_document_content(db, path)
         links = extract_wikilinks(content)
-        
+
         for link in links:
             if link not in valid_targets:
                 broken_links.append(BrokenLink(path, link))
-                
+
     return broken_links
 
-def _get_document_content(db: VectorStore, doc_path: str) -> str:
-    """Get concatenated chunk content for a document."""
-    # First get doc_id from path
+def _get_note_content(db: VectorStore, note_path: str) -> str:
+    """Get note body content from the source-first notes table."""
     row = db.conn.execute(
-        "SELECT id FROM documents WHERE path = ?",
-        (doc_path,)
+        "SELECT body_text FROM notes WHERE note_path = ?",
+        (note_path,),
     ).fetchone()
-    
+
     if not row:
         return ""
-    
-    doc_id = row[0]
-    
+    return str(row[0] or "")
+
+
+def _get_document_content(db: VectorStore, doc_path: str) -> str:
+    row = db.conn.execute(
+        "SELECT id FROM documents WHERE path = ?",
+        (doc_path,),
+    ).fetchone()
+    if not row:
+        return ""
     chunks = db.conn.execute(
         "SELECT chunk_text FROM chunks WHERE doc_id = ? AND scope = 'chunk' ORDER BY chunk_index",
-        (doc_id,)
+        (row[0],),
     ).fetchall()
-    
     return "\n".join(content for (content,) in chunks)
+
+
+def _table_exists(db: VectorStore, table_name: str) -> bool:
+    row = db.conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
 
 def main():
     """CLI entry point for validation."""

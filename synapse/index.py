@@ -129,6 +129,16 @@ def extract_document_metadata(content: str) -> dict[str, Any]:
     }
 
 
+def extract_note_provenance(metadata: dict[str, Any]) -> dict[str, str]:
+    frontmatter = metadata.get("frontmatter", {}) or {}
+    provenance: dict[str, str] = {}
+    for key in ("bundle_id", "source_id", "origin_url", "direct_paper_url", "note_kind"):
+        value = frontmatter.get(key)
+        if isinstance(value, str) and value.strip():
+            provenance[key] = value.strip()
+    return provenance
+
+
 @dataclass(frozen=True)
 class ChunkingConfig:
     min_chunk_chars: int = 400
@@ -496,7 +506,7 @@ class Indexer:
         rel_path = _relative_markdown_path(file_path, self.vault_root)
         
         # Check if already indexed with same hash
-        existing = self.db.get_document(rel_path)
+        existing = self.db.get_note(rel_path)
         if existing and existing["content_hash"] == content_hash:
             return {
                 "status": "unchanged",
@@ -504,52 +514,72 @@ class Indexer:
                 "chunks_created": 0
             }
         
-        # Upsert document
         metadata = extract_document_metadata(content)
-        doc_id = self.db.upsert_document(
-            path=rel_path,
-            content_hash=content_hash,
-            title=title,
-            metadata=metadata,
-        )
-        
-        # Delete old chunks if updating
-        if existing:
-            self.db.delete_chunks(doc_id)
-        
-        # Chunk and embed
-        chunks = chunk_markdown(content, self.chunking_config)
-        note_text = build_note_embedding_text(content, title, rel_path)
+        provenance = extract_note_provenance(metadata)
 
-        note_embedding = self.note_embedder.embed(note_text)
-        self.db.insert_chunk(
-            doc_id=doc_id,
-            chunk_index=0,
-            chunk_text=note_text,
-            embedding=note_embedding,
-            scope="note",
-        )
+        try:
+            if existing:
+                self.db.delete_note(existing["id"], commit=False)
 
-        chunks_created = 0
-
-        embeddings = self.chunk_embedder.embed_document_chunks(
-            chunks,
-            document_title=title,
-            document_path=rel_path,
-        )
-
-        for idx, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
-            if len(chunk_text.strip()) < 20:
-                continue  # Skip tiny chunks
-
-            self.db.insert_chunk(
-                doc_id=doc_id,
-                chunk_index=idx,
-                chunk_text=chunk_text,
-                embedding=embedding,
-                scope="chunk",
+            note_id = self.db.insert_note(
+                note_path=rel_path,
+                note_kind=provenance.get("note_kind"),
+                title=title,
+                body_text=strip_frontmatter(content).strip(),
+                content_hash=content_hash,
+                metadata={
+                    **metadata,
+                    "provenance": provenance,
+                },
+                commit=False,
             )
-            chunks_created += 1
+
+            if provenance.get("bundle_id") and provenance.get("source_id"):
+                source = self.db.get_source(provenance["bundle_id"], provenance["source_id"])
+                if source:
+                    self.db.link_note_source(
+                        note_id,
+                        source["id"],
+                        metadata={
+                            "origin_url": provenance.get("origin_url") or source.get("origin_url"),
+                            "direct_paper_url": provenance.get("direct_paper_url") or source.get("direct_paper_url"),
+                        },
+                        commit=False,
+                    )
+
+            chunks = chunk_markdown(content, self.chunking_config)
+            chunks_created = 0
+            embeddings = self.chunk_embedder.embed_document_chunks(
+                chunks,
+                document_title=title,
+                document_path=rel_path,
+            )
+
+            for idx, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+                if len(chunk_text.strip()) < 20:
+                    continue
+
+                self.db.insert_segment(
+                    owner_kind="note",
+                    owner_id=note_id,
+                    note_row_id=note_id,
+                    content_role="note_body",
+                    segment_index=idx,
+                    text=chunk_text,
+                    embedding=embedding,
+                    metadata={
+                        "note_path": rel_path,
+                        "bundle_id": provenance.get("bundle_id"),
+                        "source_id": provenance.get("source_id"),
+                    },
+                    commit=False,
+                )
+                chunks_created += 1
+
+            self.db.conn.commit()
+        except Exception:
+            self.db.conn.rollback()
+            raise
         
         return {
             "status": "indexed",

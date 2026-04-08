@@ -497,6 +497,33 @@ class Database:
             self.conn.commit()
         return note_id
 
+    def get_note(self, note_path: str) -> dict[str, Any] | None:
+        cur = self.conn.cursor()
+        row = cur.execute("""
+            SELECT id, note_path, note_kind, title, body_text, content_hash, metadata_json, imported_at
+            FROM notes
+            WHERE note_path = ?
+        """, (note_path,)).fetchone()
+        if not row:
+            return None
+        note = dict(row)
+        note["metadata"] = _json_load(note.pop("metadata_json"), {})
+        return note
+
+    def delete_note(self, note_id: int, *, commit: bool = True) -> int:
+        cur = self.conn.cursor()
+        segment_rows = cur.execute(
+            "SELECT id FROM segments WHERE owner_note_id = ? OR note_row_id = ?",
+            (note_id, note_id),
+        ).fetchall()
+        for row in segment_rows:
+            self._delete_segment_indexes(row["id"], commit=False)
+        cur.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+        deleted = cur.rowcount
+        if commit:
+            self.conn.commit()
+        return deleted
+
     def link_note_source(
         self,
         note_id: int,

@@ -1,9 +1,8 @@
-"""Discovery module — find unlinked similar documents.
+"""Discovery module — find unlinked similar notes."""
 
-Surfaces "hidden connections" in the knowledge base by finding
-documents that are semantically similar but not explicitly linked.
-"""
+from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,37 +13,21 @@ import numpy as np
 from .vector_store import VectorStore, create_vector_store
 
 
-# Regex to match [[wikilinks]], capturing the link text
-WIKILINK_PATTERN = re.compile(r'\[\[([^\]]+)\]\]')
+WIKILINK_PATTERN = re.compile(r"\[\[([^\]]+)\]\]")
 
 
 def extract_wikilinks(content: str) -> set[str]:
-    """
-    Extract wikilink targets from markdown content.
-    
-    Args:
-        content: Markdown text potentially containing [[links]]
-        
-    Returns:
-        Set of link targets (deduplicated)
-    """
     matches = WIKILINK_PATTERN.findall(content)
-    
-    # Handle heading anchors: [[Document#Section]] → Document
     links = set()
     for match in matches:
-        # Strip heading anchor if present
-        base = match.split('#')[0].strip()
+        base = match.split("#")[0].strip()
         if base:
             links.add(base)
-    
     return links
 
 
 @dataclass
 class Discovery:
-    """A discovered connection between two documents."""
-    
     source_path: str
     source_title: str
     target_path: str
@@ -53,70 +36,52 @@ class Discovery:
     semantic_similarity: float = 0.0
     metadata_score: float = 0.0
     graph_score: float = 0.0
-    
+
     def __repr__(self) -> str:
-        return (
-            f"Discovery({self.source_title!r} → {self.target_title!r}, "
-            f"sim={self.similarity:.1%})"
-        )
+        return f"Discovery({self.source_title!r} → {self.target_title!r}, sim={self.similarity:.1%})"
 
 
 def discover_for_document(
     db: VectorStore,
     doc_path: str,
     top_k: int = 5,
-    threshold: float = 0.6
+    threshold: float = 0.6,
 ) -> list[Discovery]:
-    """
-    Find unlinked similar documents for a single document.
-    
-    Args:
-        db: Synapse database connection
-        doc_path: Path to the source document
-        top_k: Maximum number of similar docs to check
-        threshold: Minimum similarity score (0-1)
-        
-    Returns:
-        List of Discovery objects for unlinked similar docs
-    """
-    # Get source document
-    source_doc = _get_document_record(db, doc_path)
+    source_doc = _get_note_record(db, doc_path)
     if not source_doc:
         return []
+
     source_path = source_doc["path"]
     source_title = source_doc["title"] or Path(source_path).stem
-    
-    # Get source content to check existing links
-    source_content = _get_document_content(db, doc_path)
-    existing_links = extract_wikilinks(source_content)
-    
-    # Get source embedding (average of chunk embeddings)
-    source_embedding = _get_document_embedding(db, doc_path)
+    existing_links = extract_wikilinks(source_doc.get("body_text", ""))
+    source_embedding = _get_note_embedding(db, doc_path)
     if source_embedding is None:
         return []
-    
-    # Find similar documents
-    similar_docs = _find_similar_documents(
-        db, source_embedding, top_k=top_k + 10, exclude_path=doc_path
+
+    similar_docs = _find_similar_notes(
+        db,
+        source_embedding,
+        top_k=top_k + 10,
+        exclude_path=doc_path,
     )
-    
+
     discoveries = []
     for candidate in similar_docs:
         target_path = candidate["path"]
         target_title = candidate["title"] or Path(target_path).stem
         semantic_similarity = candidate["semantic_similarity"]
-        
-        # Check if already linked (source → target)
+
         if target_title in existing_links:
             continue
-        
-        # Check if already linked (target → source)
-        target_content = _get_document_content(db, target_path)
-        target_links = extract_wikilinks(target_content)
+
+        target_doc = _get_note_record(db, target_path)
+        if not target_doc:
+            continue
+
+        target_links = extract_wikilinks(target_doc.get("body_text", ""))
         if source_title in target_links:
             continue
 
-        target_doc = _get_document_record(db, target_path)
         metadata_score = _metadata_score(source_doc, target_doc)
         graph_score = _graph_score(
             source_doc=source_doc,
@@ -131,17 +96,19 @@ def discover_for_document(
         )
         if similarity < threshold:
             continue
-        
-        discoveries.append(Discovery(
-            source_path=source_path,
-            source_title=source_title,
-            target_path=target_path,
-            target_title=target_title,
-            similarity=similarity,
-            semantic_similarity=semantic_similarity,
-            metadata_score=metadata_score,
-            graph_score=graph_score,
-        ))
+
+        discoveries.append(
+            Discovery(
+                source_path=source_path,
+                source_title=source_title,
+                target_path=target_path,
+                target_title=target_title,
+                similarity=similarity,
+                semantic_similarity=semantic_similarity,
+                metadata_score=metadata_score,
+                graph_score=graph_score,
+            )
+        )
 
     discoveries.sort(key=lambda item: item.similarity, reverse=True)
     return discoveries[:top_k]
@@ -151,172 +118,111 @@ def find_discoveries(
     db: VectorStore,
     threshold: float = 0.6,
     top_k: int = 5,
-    max_total: int = 20
+    max_total: int = 20,
 ) -> list[Discovery]:
-    """
-    Find all unlinked similar document pairs in the corpus.
-    
-    Args:
-        db: Synapse database connection
-        threshold: Minimum similarity score
-        top_k: Max similar docs to check per document
-        max_total: Maximum total discoveries to return
-        
-    Returns:
-        List of Discovery objects, sorted by similarity descending
-    """
-    # Get all documents
-    docs = db.conn.execute(
-        "SELECT path FROM documents"
-    ).fetchall()
-    
+    rows = db.conn.execute("SELECT note_path FROM notes").fetchall()
     all_discoveries = []
     seen_pairs: set[tuple[str, str]] = set()
-    
-    for (doc_path,) in docs:
+
+    for (doc_path,) in rows:
         discoveries = discover_for_document(db, doc_path, top_k=top_k, threshold=threshold)
-        
-        for d in discoveries:
-            # Deduplicate: only keep one direction of each pair
-            pair = tuple(sorted([d.source_path, d.target_path]))
+        for discovery in discoveries:
+            pair = tuple(sorted([discovery.source_path, discovery.target_path]))
             if pair in seen_pairs:
                 continue
             seen_pairs.add(pair)
-            all_discoveries.append(d)
-    
-    # Sort by similarity descending
-    all_discoveries.sort(key=lambda d: d.similarity, reverse=True)
-    
+            all_discoveries.append(discovery)
+
+    all_discoveries.sort(key=lambda item: item.similarity, reverse=True)
     return all_discoveries[:max_total]
 
 
-def _get_document_content(db: VectorStore, doc_path: str) -> str:
-    """Get concatenated chunk content for a document."""
-    # First get doc_id from path
-    row = db.conn.execute(
-        "SELECT id FROM documents WHERE path = ?",
-        (doc_path,)
-    ).fetchone()
-    
-    if not row:
-        return ""
-    
-    doc_id = row[0]
-    
-    chunks = db.conn.execute(
-        "SELECT chunk_text FROM chunks WHERE doc_id = ? AND scope = 'chunk' ORDER BY chunk_index",
-        (doc_id,)
-    ).fetchall()
-    
-    return "\n".join(content for (content,) in chunks)
-
-
-def _get_document_record(db: VectorStore, doc_path: str) -> dict[str, Any] | None:
-    if hasattr(db, "get_document"):
-        return db.get_document(doc_path)
+def _get_note_record(db: VectorStore, note_path: str) -> dict[str, Any] | None:
+    if hasattr(db, "get_note"):
+        note = db.get_note(note_path)
+        if note:
+            metadata = note.get("metadata", {}) or {}
+            return {
+                "id": note["id"],
+                "path": note["note_path"],
+                "title": note.get("title"),
+                "body_text": note.get("body_text", ""),
+                "tags": metadata.get("tags", []),
+                "wikilinks": metadata.get("wikilinks", []),
+                "frontmatter": metadata.get("frontmatter", {}),
+            }
 
     row = db.conn.execute(
-        "SELECT path, title FROM documents WHERE path = ?",
-        (doc_path,),
+        "SELECT id, note_path, title, body_text, metadata_json FROM notes WHERE note_path = ?",
+        (note_path,),
     ).fetchone()
     if not row:
         return None
+    metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
     return {
-        "path": row["path"],
+        "id": row["id"],
+        "path": row["note_path"],
         "title": row["title"],
-        "tags": [],
-        "wikilinks": [],
-        "frontmatter": {},
+        "body_text": row["body_text"],
+        "tags": metadata.get("tags", []),
+        "wikilinks": metadata.get("wikilinks", []),
+        "frontmatter": metadata.get("frontmatter", {}),
     }
 
 
-def _get_document_embedding(db: VectorStore, doc_path: str) -> Optional[np.ndarray]:
-    """Get average embedding for a document."""
-    # First get doc_id from path
+def _get_note_embedding(db: VectorStore, note_path: str) -> Optional[np.ndarray]:
     row = db.conn.execute(
-        "SELECT id FROM documents WHERE path = ?",
-        (doc_path,)
+        "SELECT id FROM notes WHERE note_path = ?",
+        (note_path,),
     ).fetchone()
-    
     if not row:
         return None
-    
-    doc_id = row[0]
-    
-    # Join with vec_chunks to get embedding
+    note_id = row[0]
     rows = db.conn.execute("""
-        SELECT v.embedding 
-        FROM vec_chunks v
-        JOIN chunks c ON c.id = v.chunk_id
-        WHERE c.doc_id = ? AND c.scope = 'chunk'
-    """, (doc_id,)).fetchall()
-    
-    if not rows:
-        return None
-    
+        SELECT v.embedding
+        FROM vec_segments v
+        JOIN segments s ON s.id = v.segment_id
+        WHERE s.owner_kind = 'note' AND s.owner_note_id = ?
+    """, (note_id,)).fetchall()
     embeddings = []
     for (emb_bytes,) in rows:
         if emb_bytes:
-            emb = np.frombuffer(emb_bytes, dtype=np.float32)
-            embeddings.append(emb)
-    
+            embeddings.append(np.frombuffer(emb_bytes, dtype=np.float32))
     if not embeddings:
         return None
-    
-    # Average of chunk embeddings
     return np.mean(embeddings, axis=0)
 
 
-def _find_similar_documents(
+def _find_similar_notes(
     db: VectorStore,
     query_embedding: np.ndarray,
+    *,
     top_k: int = 10,
-    exclude_path: Optional[str] = None
+    exclude_path: str | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Find documents similar to the query embedding.
-    
-    Returns:
-        List of candidate dicts with semantic similarity
-    """
-    # Get all document embeddings (first chunk only for efficiency)
-    # Join with vec_chunks to get embedding
-    rows = db.conn.execute("""
-        SELECT d.path, d.title, v.embedding
-        FROM documents d
-        JOIN chunks c ON d.id = c.doc_id
-        JOIN vec_chunks v ON c.id = v.chunk_id
-        WHERE c.chunk_index = 0 AND c.scope = 'chunk'
-    """).fetchall()
-    
+    rows = db.conn.execute("SELECT note_path, title FROM notes").fetchall()
     results = []
     query_norm = np.linalg.norm(query_embedding)
-    
-    for path, title, emb_bytes in rows:
-        if path == exclude_path:
+
+    for note_path, title in rows:
+        if note_path == exclude_path:
             continue
-        
-        if not emb_bytes:
+        embedding = _get_note_embedding(db, note_path)
+        if embedding is None:
             continue
-        
-        emb = np.frombuffer(emb_bytes, dtype=np.float32)
-        emb_norm = np.linalg.norm(emb)
-        
+        emb_norm = np.linalg.norm(embedding)
         if query_norm == 0 or emb_norm == 0:
             continue
-        
-        similarity = np.dot(query_embedding, emb) / (query_norm * emb_norm)
+        similarity = float(np.dot(query_embedding, embedding) / (query_norm * emb_norm))
         results.append(
             {
-                "path": path,
+                "path": note_path,
                 "title": title,
-                "semantic_similarity": float(similarity),
+                "semantic_similarity": similarity,
             }
         )
-    
-    # Sort by similarity descending
-    results.sort(key=lambda x: x["semantic_similarity"], reverse=True)
-    
+
+    results.sort(key=lambda item: item["semantic_similarity"], reverse=True)
     return results[:top_k]
 
 
@@ -418,78 +324,44 @@ def _normalize_link(value: str) -> str:
 
 
 def main():
-    """CLI entry point for discovery."""
     import argparse
     from .settings import load_settings
-    
-    parser = argparse.ArgumentParser(
-        description="🔗 Synapse Discovery — Find unlinked similar documents"
-    )
-    parser.add_argument(
-        "--config",
-        default=None,
-        help="Path to Synapse TOML config"
-    )
-    parser.add_argument(
-        "--db", 
-        default=None,
-        help="Path to synapse database"
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.65,
-        help="Minimum similarity threshold (default: 0.65)"
-    )
-    parser.add_argument(
-        "--top-k",
-        type=int,
-        default=5,
-        help="Max similar docs to check per document (default: 5)"
-    )
-    parser.add_argument(
-        "--max",
-        type=int,
-        default=10,
-        help="Maximum discoveries to show (default: 10)"
-    )
-    
+
+    parser = argparse.ArgumentParser(description="🔗 Synapse Discovery — Find unlinked similar notes")
+    parser.add_argument("--config", default=None, help="Path to Synapse TOML config")
+    parser.add_argument("--db", default=None, help="Path to synapse database")
+    parser.add_argument("--threshold", type=float, default=0.65, help="Minimum similarity threshold (default: 0.65)")
+    parser.add_argument("--top-k", type=int, default=5, help="Max similar notes to check per note (default: 5)")
+    parser.add_argument("--max", type=int, default=10, help="Maximum discoveries to show (default: 10)")
+
     args = parser.parse_args()
     settings = load_settings(args.config)
     provider = settings.embedding_provider()
-    
     db_path = Path(args.db or settings.database.path).expanduser()
     if not db_path.exists():
         print(f"❌ Database not found: {db_path}")
         print("   Run synapse-index first to build the index.")
         return 1
-    
-    print(f"🔗 Synapse Discovery")
+
+    print("🔗 Synapse Discovery")
     print(f"   Database: {db_path}")
     print(f"   Threshold: {args.threshold:.0%}")
     print()
-    
+
     db = create_vector_store(settings, db_path=db_path, embedding_dim=provider.dimensions)
-    db.initialize()  # Connect to existing database
-    discoveries = find_discoveries(
-        db,
-        threshold=args.threshold,
-        top_k=args.top_k,
-        max_total=args.max
-    )
-    
+    db.initialize()
+    discoveries = find_discoveries(db, threshold=args.threshold, top_k=args.top_k, max_total=args.max)
+
     if not discoveries:
         print("✨ No new discoveries! Your notes are well-connected.")
         return 0
-    
+
     print(f"💡 Found {len(discoveries)} potential connections:\n")
-    
-    for i, d in enumerate(discoveries, 1):
-        print(f"{i}. [{d.similarity:.1%}] {d.source_title} ↔ {d.target_title}")
-        print(f"   {d.source_path}")
-        print(f"   {d.target_path}")
+    for index, discovery in enumerate(discoveries, 1):
+        print(f"{index}. [{discovery.similarity:.1%}] {discovery.source_title} ↔ {discovery.target_title}")
+        print(f"   {discovery.source_path}")
+        print(f"   {discovery.target_path}")
         print()
-    
     return 0
 
 

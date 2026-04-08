@@ -319,9 +319,8 @@ This is a test entity about programming.
             
             assert stats["chunks_created"] > 0
             
-            # Verify in database
-            doc = db.get_document(str(test_file.relative_to(vault_root)))
-            assert doc is not None
+            note = db.get_note(str(test_file.relative_to(vault_root)))
+            assert note is not None
             
             db.close()
 
@@ -340,8 +339,8 @@ Body text.
         assert "Title: Test Entity" not in text
         assert "Path: notes/test.md" not in text
 
-    def test_index_file_creates_note_and_chunk_scopes(self):
-        """Indexing should persist one note embedding plus chunk embeddings."""
+    def test_index_file_creates_note_segments(self):
+        """Indexing should persist note-body segments in the new source-first schema."""
         from synapse.index import Indexer
         from synapse.db import Database
 
@@ -386,13 +385,15 @@ This section explains hidden links between notes.
 
             stats = indexer.index_file(test_file)
 
-            doc = db.get_document(str(test_file.relative_to(vault_root)))
-            note_chunks = db.get_chunks(doc["id"], scope="note")
-            text_chunks = db.get_chunks(doc["id"], scope="chunk")
+            note = db.get_note(str(test_file.relative_to(vault_root)))
+            segments = db.conn.execute(
+                "SELECT content_role, text FROM segments WHERE owner_kind = 'note' AND owner_note_id = ? ORDER BY segment_index",
+                (note["id"],),
+            ).fetchall()
 
             assert stats["chunks_created"] >= 2
-            assert len(note_chunks) == 1
-            assert len(text_chunks) >= 2
+            assert len(segments) >= 2
+            assert all(row["content_role"] == "note_body" for row in segments)
             db.close()
 
     def test_index_file_persists_document_metadata(self):
@@ -432,12 +433,12 @@ This note links to [[Cipher]] and references #retrieval in the body.
             )
             indexer.index_file(test_file)
 
-            doc = db.get_document(str(test_file.relative_to(vault_root)))
+            note = db.get_note(str(test_file.relative_to(vault_root)))
 
-            assert "embeddings" in doc["tags"]
-            assert "retrieval" in doc["tags"]
-            assert "Cipher" in doc["wikilinks"]
-            assert doc["frontmatter"]["status"] == "Draft"
+            assert "embeddings" in note["metadata"]["tags"]
+            assert "retrieval" in note["metadata"]["tags"]
+            assert "Cipher" in note["metadata"]["wikilinks"]
+            assert note["metadata"]["frontmatter"]["status"] == "Draft"
             db.close()
 
     def test_index_file_stores_paths_relative_to_markdown_root(self):
@@ -470,6 +471,64 @@ This note links to [[Cipher]] and references #retrieval in the body.
             )
             indexer.index_file(test_file)
 
-            assert db.get_document("projects/idea.md") is not None
-            assert db.get_document("notes/projects/idea.md") is None
+            assert db.get_note("projects/idea.md") is not None
+            assert db.get_note("notes/projects/idea.md") is None
+            db.close()
+
+    def test_index_file_links_note_to_existing_source_provenance(self):
+        from synapse.index import Indexer
+        from synapse.db import Database
+
+        class FakeEmbedder:
+            def embed(self, text):
+                return [0.1, 0.2, 0.3, 0.4]
+
+            def embed_document_chunks(self, chunks, document_title=None, document_path=None):
+                return [[0.1, 0.2, 0.3, 0.4] for _ in chunks]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "synapse.sqlite"
+            vault_root = Path(tmpdir) / "vault"
+            vault_root.mkdir()
+
+            db = Database(db_path, embedding_dim=4)
+            db.initialize()
+            bundle_row_id = db.upsert_bundle("bundle-1", "hash-1", commit=False)
+            source_row_id = db.insert_source(
+                bundle_row_id,
+                "source-1",
+                title="Prepared Source",
+                commit=False,
+            )
+            db.conn.commit()
+
+            test_file = vault_root / "linked.md"
+            test_file.write_text("""---
+bundle_id: bundle-1
+source_id: source-1
+note_kind: literature-note
+---
+
+# Linked Note
+
+This note summarizes a prepared source.
+""")
+
+            indexer = Indexer(
+                db=db,
+                vault_root=vault_root,
+                embedding_client=FakeEmbedder(),
+            )
+            indexer.index_file(test_file)
+
+            note = db.get_note("linked.md")
+            link = db.conn.execute(
+                "SELECT source_row_id FROM note_sources WHERE note_id = ?",
+                (note["id"],),
+            ).fetchone()
+
+            assert note["note_kind"] == "literature-note"
+            assert note["metadata"]["provenance"]["bundle_id"] == "bundle-1"
+            assert link is not None
+            assert link["source_row_id"] == source_row_id
             db.close()
