@@ -106,7 +106,7 @@ Current codebase includes:
 - generic markdown-folder indexing
 - sqlite-vec storage behind a `VectorStore` seam
 - note-level and contextual chunk-level embeddings
-- semantic search with `note`, `chunk`, and `hybrid` modes
+- semantic search with `source`, `note`, `evidence`, and `research` modes
 - metadata-aware reranking and discovery scoring
 - validation and gardening utilities
 - aligned MCP and HTTP/OpenAPI interfaces
@@ -115,7 +115,7 @@ Current codebase includes:
 Recently verified live:
 
 - Infinity-served Perplexity embedding models
-- end-to-end indexing, hybrid search, and discovery against the generic fixture vault
+- end-to-end indexing, ranked search, and discovery against the generic fixture vault
 
 For the technical map of the system, see [docs/architecture.md](docs/architecture.md).
 
@@ -158,7 +158,7 @@ chunk_strategy = "hybrid"
 [search]
 provider = "default"
 limit = 5
-mode = "hybrid"
+mode = "research"
 candidate_multiplier = 10
 note_weight = 0.5
 chunk_weight = 0.5
@@ -316,9 +316,10 @@ uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite 
 Search modes:
 
 ```bash
+uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite --mode source "paper-backed findings"
 uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite --mode note "semantic memory"
-uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite --mode chunk "contextual retrieval"
-uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite --mode hybrid "weak signals across notes"
+uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite --mode evidence "contextual retrieval"
+uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite --mode research "weak signals across notes"
 ```
 
 ### Discover hidden relationships

@@ -136,7 +136,7 @@ Important sections:
   - `provider`: note-level embedding provider
   - `contextual_provider`: chunk-level embedding provider
 - `[search]`
-  - `mode`: `note`, `chunk`, or `hybrid`
+  - `mode`: `source`, `note`, `evidence`, or `research`
 - `[providers.embeddings.*]`
   - runtime endpoints and models
 
@@ -231,7 +231,7 @@ Valid `synapse_search`:
 ```json
 {
   "query": "cross-paper insights about AI and computer science",
-  "mode": "hybrid",
+  "mode": "research",
   "db_path": "/data/workspace/e2e/test/synapse.sqlite"
 }
 ```
@@ -240,7 +240,7 @@ Invalid `synapse_search`:
 
 ```json
 {
-  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},mode:\"hybrid\",query:\"cross-paper insights about AI and computer science\""
+  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},mode:\"research\",query:\"cross-paper insights about AI and computer science\""
 }
 ```
 
@@ -301,15 +301,16 @@ What this does:
 uv run synapse-search \
   --config config/synapse.toml \
   --db /path/to/synapse.sqlite \
-  --mode hybrid \
+  --mode research \
   "find weak signals across notes"
 ```
 
 Modes:
 
-- `note`: broad thematic retrieval
-- `chunk`: precise section retrieval
-- `hybrid`: note shortlist plus chunk evidence
+- `source`: grouped results around indexed source documents
+- `note`: grouped results around vault note paths
+- `evidence`: raw ranked segment matches
+- `research`: mixed top-level results using the best available source or note grouping
 
 ### 3. Discover hidden relationships
 
@@ -426,7 +427,7 @@ searcher = Searcher(
 results = searcher.search(
     "find hidden relationships across markdown notes",
     limit=5,
-    mode="hybrid",
+    mode="research",
 )
 print(results)
 ```

@@ -58,9 +58,11 @@ uv run synapse-index \
 uv run synapse-search \
   --config config/synapse.toml \
   --db ~/notes/.synapse.sqlite \
-  --mode hybrid \
+  --mode research \
   "weak signals across notes"
 ```
+
+Available search modes are `source`, `note`, `evidence`, and `research`. `research` is the default mixed retrieval surface.
 
 ## 6. Explore hidden relationships
 

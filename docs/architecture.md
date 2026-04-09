@@ -18,6 +18,32 @@ The design goal is simple:
 - keep reasoning optional and layered on top
 - keep transport adapters thin
 
+## Query Flow
+
+Use this as the current mental model for request flow.
+
+Retrieval stays deterministic and segment-first. `Cipher` or another LLM only enters after retrieval when a caller explicitly asks for reasoning.
+
+```mermaid
+graph TD
+    Q[User or Agent Query] --> T[MCP / HTTP / CLI]
+    T --> S[Synapse Service Layer]
+
+    S --> L[Lexical Search over indexed segments]
+    S --> V[Vector Search over indexed segments]
+
+    L --> M[Merge and rerank candidates]
+    V --> M
+
+    M --> A[Aggregate into source / note / evidence / research views]
+    A --> R[Ranked retrieval results]
+
+    R --> C{Need reasoning?}
+    C -->|No| O[Return retrieval results]
+    C -->|Yes| X[Cipher or downstream LLM with retrieved context]
+    X --> O
+```
+
 ## Retrieval Core
 
 The retrieval core is plain Python application code.
@@ -140,7 +166,7 @@ What is already solid:
 
 - generic markdown-folder indexing
 - note-level and contextual chunk-level embeddings
-- semantic search with `note`, `chunk`, and `hybrid` modes
+- semantic search with `source`, `note`, `evidence`, and `research` modes
 - metadata-aware reranking
 - discovery scoring that combines semantic, metadata, and graph signals
 - a current discovery formula of `0.75 * semantic + metadata + graph`, with metadata and graph contributions capped

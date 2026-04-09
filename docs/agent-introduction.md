@@ -31,6 +31,13 @@ Synapse is not a notes app and not a chatbot shell. It is the memory and retriev
 
 Synapse has three main layers.
 
+Current search is segment-first:
+
+- Synapse runs lexical and vector retrieval over indexed segments
+- merges and reranks the candidates
+- aggregates the results into `source`, `note`, `evidence`, or `research` views
+- calls `Cipher` only when a task explicitly needs reasoning
+
 ### 1. Deterministic retrieval core
 
 Normal Python services handle:
@@ -246,7 +253,7 @@ Search:
 uv run synapse-search \
   --config config/synapse.toml \
   --db /path/to/synapse.sqlite \
-  --mode hybrid \
+  --mode research \
   "find weak signals across notes"
 ```
 

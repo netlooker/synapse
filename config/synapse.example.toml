@@ -22,7 +22,7 @@ chunk_strategy = "hybrid"
 [search]
 provider = "default"
 limit = 5
-mode = "hybrid"
+mode = "research"
 candidate_multiplier = 10
 note_weight = 0.5
 chunk_weight = 0.5

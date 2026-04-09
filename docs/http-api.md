@@ -169,6 +169,8 @@ curl -X POST "http://127.0.0.1:8765/index" \
 
 ### Search
 
+Accepted search modes are `source`, `note`, `evidence`, and `research`.
+
 ```bash
 curl -X POST "http://127.0.0.1:8765/search" \
   -H "content-type: application/json" \
@@ -176,7 +178,7 @@ curl -X POST "http://127.0.0.1:8765/search" \
     "query": "find weak signals across notes",
     "config_path": "config/synapse.toml",
     "db_path": "/path/to/synapse.sqlite",
-    "mode": "hybrid",
+    "mode": "research",
     "limit": 5
   }'
 ```

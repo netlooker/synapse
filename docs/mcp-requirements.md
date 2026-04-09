@@ -112,7 +112,7 @@ Valid search call:
 ```json
 {
   "query": "cross-paper insights about AI and computer science",
-  "mode": "hybrid",
+  "mode": "research",
   "db_path": "/data/workspace/e2e/test/synapse.sqlite"
 }
 ```
@@ -121,7 +121,7 @@ Invalid search call:
 
 ```json
 {
-  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},mode:\"hybrid\",query:\"cross-paper insights about AI and computer science\""
+  "db_path": "{\"/data/workspace/e2e/test/synapse.sqlite\"},mode:\"research\",query:\"cross-paper insights about AI and computer science\""
 }
 ```
 
@@ -214,12 +214,12 @@ When raw path fields are fragile in the agent runtime, `synapse_index_for_worksp
 `synapse_search` should:
 
 - work against an existing Synapse SQLite index
-- support `note`, `chunk`, and `hybrid`
+- support `source`, `note`, `evidence`, and `research`
 - return structured ranked results
 
-For local-model runtimes, `synapse_search_simple(query, db_path, mode="hybrid")` is the preferred search wrapper.
+For local-model runtimes, `synapse_search_simple(query, db_path, mode="research")` is the preferred search wrapper.
 
-When raw path fields are fragile in the agent runtime, `synapse_search_for_workspace(query, workspace="current", mode="hybrid")` is the preferred pathless search wrapper.
+When raw path fields are fragile in the agent runtime, `synapse_search_for_workspace(query, workspace="current", mode="research")` is the preferred pathless search wrapper.
 
 ## Discovery Expectations
 

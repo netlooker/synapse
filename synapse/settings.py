@@ -77,7 +77,7 @@ class ProviderSettings:
 class SearchSettings:
     provider: str = "default"
     limit: int = 5
-    mode: str = "hybrid"
+    mode: str = "research"
     candidate_multiplier: int = 4
     note_weight: float = 0.4
     chunk_weight: float = 0.6
@@ -177,7 +177,7 @@ def load_settings(config_path: str | Path | None = None) -> AppSettings:
                 search.get("provider", index.get("provider", "default")),
             ),
             limit=int(search.get("limit", 5)),
-            mode=search.get("mode", "hybrid"),
+            mode=search.get("mode", "research"),
             candidate_multiplier=max(1, int(search.get("candidate_multiplier", 4))),
             note_weight=float(search.get("note_weight", 0.4)),
             chunk_weight=float(search.get("chunk_weight", 0.6)),
