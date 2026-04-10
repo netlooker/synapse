@@ -147,6 +147,49 @@ class Database:
                 UNIQUE(source_path, target_path)
             )
         """)
+
+        # Compiled knowledge layer: jobs and proposals.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS knowledge_jobs (
+                id INTEGER PRIMARY KEY,
+                job_kind TEXT NOT NULL,
+                scope_json TEXT NOT NULL DEFAULT '{}',
+                status TEXT NOT NULL DEFAULT 'pending',
+                summary TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS knowledge_proposals (
+                id INTEGER PRIMARY KEY,
+                job_id INTEGER REFERENCES knowledge_jobs(id) ON DELETE SET NULL,
+                note_kind TEXT NOT NULL,
+                slug TEXT NOT NULL,
+                target_path TEXT NOT NULL,
+                title TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                body_markdown TEXT NOT NULL,
+                frontmatter_json TEXT NOT NULL DEFAULT '{}',
+                supporting_refs_json TEXT NOT NULL DEFAULT '{}',
+                base_content_hash TEXT,
+                reviewer_action_json TEXT NOT NULL DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_knowledge_proposals_status
+            ON knowledge_proposals(status)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_knowledge_proposals_job
+            ON knowledge_proposals(job_id)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_knowledge_proposals_target
+            ON knowledge_proposals(target_path)
+        """)
         
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_sources_bundle_row_id ON sources(bundle_row_id)
@@ -354,6 +397,48 @@ class Database:
         source["metadata"] = _json_load(source.pop("metadata_json"), {})
         source["artifact"] = _json_load(source.pop("artifact_json"), {})
         return source
+
+    def list_sources_for_bundle(self, bundle_id: str) -> list[dict[str, Any]]:
+        """Return every persisted source that belongs to a bundle, in stable order."""
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            """
+            SELECT
+                s.id,
+                b.bundle_id,
+                s.source_id,
+                s.origin_url,
+                s.direct_paper_url,
+                s.title,
+                s.authors_json,
+                s.published,
+                s.source_type,
+                s.retrieved_at,
+                s.extraction_status,
+                s.extraction_method,
+                s.summary_text,
+                s.abstract_text,
+                s.full_text,
+                s.full_text_path,
+                s.note_path,
+                s.metadata_json,
+                s.artifact_json,
+                s.imported_at
+            FROM sources s
+            JOIN bundles b ON b.id = s.bundle_row_id
+            WHERE b.bundle_id = ?
+            ORDER BY s.id
+            """,
+            (bundle_id,),
+        ).fetchall()
+        sources: list[dict[str, Any]] = []
+        for row in rows:
+            source = dict(row)
+            source["authors"] = _json_load(source.pop("authors_json"), [])
+            source["metadata"] = _json_load(source.pop("metadata_json"), {})
+            source["artifact"] = _json_load(source.pop("artifact_json"), {})
+            sources.append(source)
+        return sources
 
     def insert_note(
         self,
@@ -589,6 +674,191 @@ class Database:
         """, params).fetchall()
         return [_segment_search_row(dict(row), lexical=False) for row in rows]
 
+    # ------------------------------------------------------------------
+    # Compiled knowledge layer
+    # ------------------------------------------------------------------
+
+    def create_knowledge_job(
+        self,
+        *,
+        job_kind: str,
+        scope: dict[str, Any] | None = None,
+        status: str = "pending",
+        summary: str | None = None,
+        commit: bool = True,
+    ) -> int:
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO knowledge_jobs (job_kind, scope_json, status, summary)
+            VALUES (?, ?, ?, ?)
+            """,
+            (job_kind, json.dumps(scope or {}, sort_keys=True), status, summary),
+        )
+        job_id = cur.lastrowid
+        if commit:
+            self.conn.commit()
+        return job_id
+
+    def update_knowledge_job(
+        self,
+        job_id: int,
+        *,
+        status: str | None = None,
+        summary: str | None = None,
+        commit: bool = True,
+    ) -> None:
+        cur = self.conn.cursor()
+        fields: list[str] = []
+        params: list[Any] = []
+        if status is not None:
+            fields.append("status = ?")
+            params.append(status)
+        if summary is not None:
+            fields.append("summary = ?")
+            params.append(summary)
+        if not fields:
+            return
+        fields.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(job_id)
+        cur.execute(
+            f"UPDATE knowledge_jobs SET {', '.join(fields)} WHERE id = ?",
+            params,
+        )
+        if commit:
+            self.conn.commit()
+
+    def get_knowledge_job(self, job_id: int) -> dict[str, Any] | None:
+        cur = self.conn.cursor()
+        row = cur.execute(
+            """
+            SELECT id, job_kind, scope_json, status, summary, created_at, updated_at
+            FROM knowledge_jobs WHERE id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+        if not row:
+            return None
+        job = dict(row)
+        job["scope"] = _json_load(job.pop("scope_json"), {})
+        return job
+
+    def insert_knowledge_proposal(
+        self,
+        *,
+        job_id: int | None,
+        note_kind: str,
+        slug: str,
+        target_path: str,
+        title: str | None,
+        body_markdown: str,
+        frontmatter: dict[str, Any] | None = None,
+        supporting_refs: dict[str, Any] | None = None,
+        base_content_hash: str | None = None,
+        status: str = "pending",
+        commit: bool = True,
+    ) -> int:
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO knowledge_proposals (
+                job_id, note_kind, slug, target_path, title, status,
+                body_markdown, frontmatter_json, supporting_refs_json, base_content_hash
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                job_id,
+                note_kind,
+                slug,
+                target_path,
+                title,
+                status,
+                body_markdown,
+                json.dumps(frontmatter or {}, sort_keys=True),
+                json.dumps(supporting_refs or {}, sort_keys=True),
+                base_content_hash,
+            ),
+        )
+        proposal_id = cur.lastrowid
+        if commit:
+            self.conn.commit()
+        return proposal_id
+
+    def get_knowledge_proposal(self, proposal_id: int) -> dict[str, Any] | None:
+        cur = self.conn.cursor()
+        row = cur.execute(
+            """
+            SELECT id, job_id, note_kind, slug, target_path, title, status,
+                   body_markdown, frontmatter_json, supporting_refs_json,
+                   base_content_hash, reviewer_action_json, created_at, updated_at
+            FROM knowledge_proposals WHERE id = ?
+            """,
+            (proposal_id,),
+        ).fetchone()
+        if not row:
+            return None
+        return _hydrate_knowledge_proposal(dict(row))
+
+    def list_knowledge_proposals(
+        self,
+        *,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        cur = self.conn.cursor()
+        where = ""
+        params: list[Any] = []
+        if status:
+            where = "WHERE status = ?"
+            params.append(status)
+        sql = f"""
+            SELECT id, job_id, note_kind, slug, target_path, title, status,
+                   body_markdown, frontmatter_json, supporting_refs_json,
+                   base_content_hash, reviewer_action_json, created_at, updated_at
+            FROM knowledge_proposals
+            {where}
+            ORDER BY id DESC
+        """
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        rows = cur.execute(sql, params).fetchall()
+        return [_hydrate_knowledge_proposal(dict(row)) for row in rows]
+
+    def update_knowledge_proposal_status(
+        self,
+        proposal_id: int,
+        *,
+        status: str,
+        reviewer_action: dict[str, Any] | None = None,
+        commit: bool = True,
+    ) -> None:
+        cur = self.conn.cursor()
+        cur.execute(
+            """
+            UPDATE knowledge_proposals
+            SET status = ?,
+                reviewer_action_json = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                status,
+                json.dumps(reviewer_action or {}, sort_keys=True),
+                proposal_id,
+            ),
+        )
+        if commit:
+            self.conn.commit()
+
+    def count_knowledge_proposals_by_status(self) -> dict[str, int]:
+        cur = self.conn.cursor()
+        rows = cur.execute(
+            "SELECT status, COUNT(*) AS count FROM knowledge_proposals GROUP BY status"
+        ).fetchall()
+        return {row["status"]: row["count"] for row in rows}
+
     def _extension_candidates(self) -> list[Path | str]:
         candidates: list[Path | str] = []
         if self.extension_path:
@@ -674,6 +944,13 @@ def _segment_filter_sql(filters: dict[str, Any] | None) -> tuple[list[str], list
         clauses.append("n.note_path = ?")
         params.append(note_path)
     return clauses, params
+
+
+def _hydrate_knowledge_proposal(row: dict[str, Any]) -> dict[str, Any]:
+    row["frontmatter"] = _json_load(row.pop("frontmatter_json"), {})
+    row["supporting_refs"] = _json_load(row.pop("supporting_refs_json"), {})
+    row["reviewer_action"] = _json_load(row.pop("reviewer_action_json"), {})
+    return row
 
 
 def _segment_search_row(row: dict[str, Any], *, lexical: bool) -> dict[str, Any]:

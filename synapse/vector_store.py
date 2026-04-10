@@ -55,8 +55,28 @@ class VectorStore(Protocol):
         commit: bool = True,
     ) -> int: ...
     def get_source(self, bundle_id: str, source_id: str) -> dict[str, Any] | None: ...
+    def list_sources_for_bundle(self, bundle_id: str) -> list[dict[str, Any]]: ...
+    def insert_note(
+        self,
+        *,
+        note_path: str | None,
+        title: str | None,
+        body_text: str,
+        note_kind: str | None = None,
+        content_hash: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        commit: bool = True,
+    ) -> int: ...
     def get_note(self, note_path: str) -> dict[str, Any] | None: ...
     def delete_note(self, note_id: int, *, commit: bool = True) -> int: ...
+    def link_note_source(
+        self,
+        note_id: int,
+        source_row_id: int,
+        metadata: dict[str, Any] | None = None,
+        *,
+        commit: bool = True,
+    ) -> None: ...
     def insert_segment(
         self,
         *,
@@ -86,6 +106,55 @@ class VectorStore(Protocol):
         limit: int = 10,
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]: ...
+    def create_knowledge_job(
+        self,
+        *,
+        job_kind: str,
+        scope: dict[str, Any] | None = None,
+        status: str = "pending",
+        summary: str | None = None,
+        commit: bool = True,
+    ) -> int: ...
+    def update_knowledge_job(
+        self,
+        job_id: int,
+        *,
+        status: str | None = None,
+        summary: str | None = None,
+        commit: bool = True,
+    ) -> None: ...
+    def get_knowledge_job(self, job_id: int) -> dict[str, Any] | None: ...
+    def insert_knowledge_proposal(
+        self,
+        *,
+        job_id: int | None,
+        note_kind: str,
+        slug: str,
+        target_path: str,
+        title: str | None,
+        body_markdown: str,
+        frontmatter: dict[str, Any] | None = None,
+        supporting_refs: dict[str, Any] | None = None,
+        base_content_hash: str | None = None,
+        status: str = "pending",
+        commit: bool = True,
+    ) -> int: ...
+    def get_knowledge_proposal(self, proposal_id: int) -> dict[str, Any] | None: ...
+    def list_knowledge_proposals(
+        self,
+        *,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]: ...
+    def update_knowledge_proposal_status(
+        self,
+        proposal_id: int,
+        *,
+        status: str,
+        reviewer_action: dict[str, Any] | None = None,
+        commit: bool = True,
+    ) -> None: ...
+    def count_knowledge_proposals_by_status(self) -> dict[str, int]: ...
 
 
 class SQLiteVecStore:
@@ -150,11 +219,32 @@ class SQLiteVecStore:
     def get_source(self, bundle_id: str, source_id: str) -> dict[str, Any] | None:
         return self.backend.get_source(bundle_id, source_id)
 
+    def list_sources_for_bundle(self, bundle_id: str) -> list[dict[str, Any]]:
+        return self.backend.list_sources_for_bundle(bundle_id)
+
+    def insert_note(self, **kwargs: Any) -> int:
+        return self.backend.insert_note(**kwargs)
+
     def get_note(self, note_path: str) -> dict[str, Any] | None:
         return self.backend.get_note(note_path)
 
     def delete_note(self, note_id: int, *, commit: bool = True) -> int:
         return self.backend.delete_note(note_id, commit=commit)
+
+    def link_note_source(
+        self,
+        note_id: int,
+        source_row_id: int,
+        metadata: dict[str, Any] | None = None,
+        *,
+        commit: bool = True,
+    ) -> None:
+        return self.backend.link_note_source(
+            note_id,
+            source_row_id,
+            metadata=metadata,
+            commit=commit,
+        )
 
     def insert_segment(self, **kwargs: Any) -> int:
         return self.backend.insert_segment(**kwargs)
@@ -179,6 +269,35 @@ class SQLiteVecStore:
         filters: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         return self.backend.search_segments_vector(query_embedding, limit=limit, filters=filters)
+
+    def create_knowledge_job(self, **kwargs: Any) -> int:
+        return self.backend.create_knowledge_job(**kwargs)
+
+    def update_knowledge_job(self, job_id: int, **kwargs: Any) -> None:
+        return self.backend.update_knowledge_job(job_id, **kwargs)
+
+    def get_knowledge_job(self, job_id: int) -> dict[str, Any] | None:
+        return self.backend.get_knowledge_job(job_id)
+
+    def insert_knowledge_proposal(self, **kwargs: Any) -> int:
+        return self.backend.insert_knowledge_proposal(**kwargs)
+
+    def get_knowledge_proposal(self, proposal_id: int) -> dict[str, Any] | None:
+        return self.backend.get_knowledge_proposal(proposal_id)
+
+    def list_knowledge_proposals(
+        self,
+        *,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        return self.backend.list_knowledge_proposals(status=status, limit=limit)
+
+    def update_knowledge_proposal_status(self, proposal_id: int, **kwargs: Any) -> None:
+        return self.backend.update_knowledge_proposal_status(proposal_id, **kwargs)
+
+    def count_knowledge_proposals_by_status(self) -> dict[str, int]:
+        return self.backend.count_knowledge_proposals_by_status()
 
 
 def create_vector_store(
