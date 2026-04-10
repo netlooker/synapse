@@ -38,7 +38,7 @@ stub_review_timeout_seconds = 45
 # every /knowledge/* and /ui/knowledge/* route returns HTTP 404 and no
 # managed files are written. Override per-environment via SYNAPSE_KNOWLEDGE_ENABLED.
 enabled = false
-managed_root = "_compiled"
+managed_root = "_knowledge"
 default_status = "draft"
 generated_by = "synapse"
 auto_compile_on_ingest = false

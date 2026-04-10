@@ -11,3 +11,4 @@ dist/
 *.sqlite-wal
 .DS_Store
 config/synapse.toml
+.claude/

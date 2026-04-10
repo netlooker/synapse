@@ -50,7 +50,7 @@ def test_load_settings_reads_pplx_06b_provider_defaults():
     assert settings.database.path == "~/notes/.synapse.sqlite"
     # Knowledge layer is opt-in and inert by default.
     assert settings.knowledge.enabled is False
-    assert settings.knowledge.managed_root == "_compiled"
+    assert settings.knowledge.managed_root == "_knowledge"
     assert settings.knowledge.default_status == "draft"
     assert settings.knowledge.generated_by == "synapse"
     assert settings.knowledge.auto_compile_on_ingest is False

@@ -180,12 +180,11 @@ The compiled layer should not be an unbounded pile of LLM-generated files. It ne
 This RFC proposes a reserved subtree inside the vault or workspace:
 
 ```text
-_compiled/
+_knowledge/
   index.md
   log.md
   sources/
   concepts/
-  entities/
   syntheses/
   comparisons/
   queries/
@@ -251,9 +250,9 @@ Rules:
 
 Examples:
 
-- `_compiled/sources/attention-is-all-you-need.md`
-- `_compiled/concepts/contextual-retrieval.md`
-- `_compiled/comparisons/perplexity-0-6b-vs-4b.md`
+- `_knowledge/sources/attention-is-all-you-need.md`
+- `_knowledge/concepts/contextual-retrieval.md`
+- `_knowledge/comparisons/perplexity-0-6b-vs-4b.md`
 
 ### Frontmatter Schema
 
@@ -277,8 +276,8 @@ origin_urls:
   - https://example.com/paper-a
   - https://example.com/paper-b
 related_notes:
-  - _compiled/concepts/hybrid-search.md
-  - _compiled/comparisons/contextual-vs-naive-rag.md
+  - _knowledge/concepts/hybrid-search.md
+  - _knowledge/comparisons/contextual-vs-naive-rag.md
 confidence: medium
 ---
 ```
@@ -661,7 +660,7 @@ Mitigation:
 Deliver:
 
 - managed generated-note directory
-- reserved `_compiled/` topology with canonical subdirectories
+- reserved `_knowledge/` topology with canonical subdirectories
 - `source_summary` generation from ingested bundles
 - provenance frontmatter
 - re-index generated notes into Synapse
@@ -735,7 +734,7 @@ That is additive to Synapse's current business value and creates a clearer path 
 
 ## Open Questions
 
-- Should generated notes live inside the main vault or under a reserved managed subtree such as `synapse/` or `_compiled/`?
+- Should the default `_knowledge/` managed subtree live inside the main vault long-term, or should Synapse also support an external managed workspace?
 - Which note kinds are valuable enough for the first release?
 - Should compile actions be fully automatic on ingest, or default to dry-run plus review?
 - How strict should provenance requirements be in phase 1?

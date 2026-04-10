@@ -27,12 +27,14 @@ def test_slugify_handles_punctuation_and_unicode():
 
 
 def test_managed_paths_use_kind_directory_layout():
-    note = managed_note_path("_compiled", KnowledgeNoteKind.SOURCE_SUMMARY, "foo")
-    assert note == "_compiled/sources/foo.md"
-    scoped = managed_note_path("_compiled", KnowledgeNoteKind.SOURCE_SUMMARY, "foo", "bundle-1")
-    assert scoped == "_compiled/sources/bundle-1/foo.md"
-    assert managed_index_path("_compiled") == "_compiled/index.md"
-    assert managed_log_path("_compiled") == "_compiled/log.md"
+    note = managed_note_path("_knowledge", KnowledgeNoteKind.SOURCE_SUMMARY, "foo")
+    assert note == "_knowledge/sources/foo.md"
+    scoped = managed_note_path("_knowledge", KnowledgeNoteKind.SOURCE_SUMMARY, "foo", "bundle-1")
+    assert scoped == "_knowledge/sources/bundle-1/foo.md"
+    assert managed_index_path("_knowledge") == "_knowledge/index.md"
+    assert managed_log_path("_knowledge") == "_knowledge/log.md"
+    assert managed_index_path("") == "_knowledge/index.md"
+    assert managed_log_path("") == "_knowledge/log.md"
     # managed_root override
     assert managed_note_path("knowledge", KnowledgeNoteKind.CONCEPT, "x") == "knowledge/concepts/x.md"
 

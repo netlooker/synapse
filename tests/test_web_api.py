@@ -181,7 +181,7 @@ def test_knowledge_json_routes_use_shared_services(monkeypatch):
         created_count=2,
     )
     overview_response = KnowledgeOverviewResponse(
-        managed_root="_compiled",
+        managed_root="_knowledge",
         vault_root="/tmp/vault",
         counts={"pending": 2},
         recent_proposals=[
@@ -191,7 +191,7 @@ def test_knowledge_json_routes_use_shared_services(monkeypatch):
                 note_kind="source_summary",
                 slug="source-attention",
                 title="Attention Is All You Need",
-                target_path="_compiled/sources/bundle-001/source-attention.md",
+                target_path="_knowledge/sources/bundle-001/source-attention.md",
                 status="pending",
             )
         ],
@@ -201,7 +201,7 @@ def test_knowledge_json_routes_use_shared_services(monkeypatch):
         job_id=7,
         note_kind="source_summary",
         slug="source-attention",
-        target_path="_compiled/sources/bundle-001/source-attention.md",
+        target_path="_knowledge/sources/bundle-001/source-attention.md",
         title="Attention Is All You Need",
         status="pending",
         body_markdown="# Attention",
@@ -211,12 +211,12 @@ def test_knowledge_json_routes_use_shared_services(monkeypatch):
     proposal_list_response = KnowledgeProposalListResponse(proposals=[proposal_detail])
     apply_response = KnowledgeApplyResponse(
         proposal_id=11,
-        target_path="_compiled/sources/bundle-001/source-attention.md",
-        written_path="/tmp/vault/_compiled/sources/bundle-001/source-attention.md",
+        target_path="_knowledge/sources/bundle-001/source-attention.md",
+        written_path="/tmp/vault/_knowledge/sources/bundle-001/source-attention.md",
         reindexed_files=[
-            "_compiled/sources/bundle-001/source-attention.md",
-            "_compiled/index.md",
-            "_compiled/log.md",
+            "_knowledge/sources/bundle-001/source-attention.md",
+            "_knowledge/index.md",
+            "_knowledge/log.md",
         ],
     )
     reject_response = KnowledgeRejectResponse(proposal=proposal_detail.model_copy(update={"status": "rejected"}))
@@ -252,12 +252,12 @@ def test_knowledge_json_routes_use_shared_services(monkeypatch):
 
 
 def test_knowledge_ui_routes_render_and_redirect(monkeypatch, tmp_path):
-    managed_root = "_compiled"
+    managed_root = "_knowledge"
     log_dir = tmp_path / managed_root
     log_dir.mkdir(parents=True)
     (log_dir / "log.md").write_text(
         "# Compiled knowledge log\n\n"
-        "- 2026-04-10T10:00:00Z :: apply :: proposal #11 (source_summary) -> `_compiled/sources/bundle-001/source-attention.md`\n",
+        "- 2026-04-10T10:00:00Z :: apply :: proposal #11 (source_summary) -> `_knowledge/sources/bundle-001/source-attention.md`\n",
         encoding="utf-8",
     )
     overview_response = KnowledgeOverviewResponse(
@@ -271,7 +271,7 @@ def test_knowledge_ui_routes_render_and_redirect(monkeypatch, tmp_path):
                 note_kind="source_summary",
                 slug="source-attention",
                 title="Attention Is All You Need",
-                target_path="_compiled/sources/bundle-001/source-attention.md",
+                target_path="_knowledge/sources/bundle-001/source-attention.md",
                 status="pending",
             )
         ],
@@ -281,7 +281,7 @@ def test_knowledge_ui_routes_render_and_redirect(monkeypatch, tmp_path):
         job_id=7,
         note_kind="source_summary",
         slug="source-attention",
-        target_path="_compiled/sources/bundle-001/source-attention.md",
+        target_path="_knowledge/sources/bundle-001/source-attention.md",
         title="Attention Is All You Need",
         status="pending",
         body_markdown="# Attention",
@@ -489,7 +489,7 @@ def test_live_ui_apply_route_works_with_runtime_sqlite_wrapper(tmp_path, monkeyp
                 "",
                 "[knowledge]",
                 "enabled = true",
-                'managed_root = "_compiled"',
+                'managed_root = "_knowledge"',
                 "",
                 "[providers.embeddings.default]",
                 'type = "ollama"',
@@ -545,12 +545,12 @@ def test_live_ui_apply_route_works_with_runtime_sqlite_wrapper(tmp_path, monkeyp
     assert proposals.status_code == 200
     assert proposals.json()["proposals"][0]["id"] == proposal_id
 
-    compiled_note = vault / "_compiled" / "sources" / "bundle-001" / "source-attention.md"
+    compiled_note = vault / "_knowledge" / "sources" / "bundle-001" / "source-attention.md"
     assert compiled_note.exists()
     assert "Attention Is All You Need" in compiled_note.read_text(encoding="utf-8")
 
-    index_path = vault / "_compiled" / "index.md"
-    log_path = vault / "_compiled" / "log.md"
+    index_path = vault / "_knowledge" / "index.md"
+    log_path = vault / "_knowledge" / "log.md"
     assert index_path.exists()
     assert log_path.exists()
     assert "source-attention.md" in index_path.read_text(encoding="utf-8")

@@ -101,7 +101,7 @@ class KnowledgeSettings:
     """Settings for the optional compiled knowledge layer."""
 
     enabled: bool = False
-    managed_root: str = "_compiled"
+    managed_root: str = "_knowledge"
     default_status: str = "draft"
     generated_by: str = "synapse"
     auto_compile_on_ingest: bool = False
@@ -214,7 +214,7 @@ def load_settings(config_path: str | Path | None = None) -> AppSettings:
             enabled=_coerce_bool(
                 os.environ.get("SYNAPSE_KNOWLEDGE_ENABLED", knowledge.get("enabled", False))
             ),
-            managed_root=str(knowledge.get("managed_root", "_compiled")).strip() or "_compiled",
+            managed_root=str(knowledge.get("managed_root", "_knowledge")).strip() or "_knowledge",
             default_status=str(knowledge.get("default_status", "draft")) or "draft",
             generated_by=str(knowledge.get("generated_by", "synapse")) or "synapse",
             auto_compile_on_ingest=_coerce_bool(

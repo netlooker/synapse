@@ -107,7 +107,7 @@ def knowledge_env(tmp_path):
     ResearchBundleIngestor(db=db, embedding_client=FakeEmbedder()).ingest_bundle_file(bundle_path)
 
     settings = AppSettings(
-        knowledge=KnowledgeSettings(enabled=True, managed_root="_compiled"),
+        knowledge=KnowledgeSettings(enabled=True, managed_root="_knowledge"),
         search=SearchSettings(
             provider="default",
             limit=5,
@@ -165,7 +165,7 @@ def test_compile_bundle_creates_source_summary_proposals(knowledge_env):
     assert proposal["status"] == "pending"
     assert proposal["title"] == "Attention Is All You Need"
     assert proposal["target_path"] == managed_note_path(
-        "_compiled",
+        "_knowledge",
         KnowledgeNoteKind.SOURCE_SUMMARY,
         "source-attention",
         "bundle-001",
@@ -212,8 +212,8 @@ def test_apply_proposal_writes_note_updates_index_log_and_reindexes(knowledge_en
     assert after["reviewer_action"]["action"] == "apply"
 
     # index.md and log.md are present under the managed root.
-    index_path = vault / managed_index_path("_compiled")
-    log_path = vault / managed_log_path("_compiled")
+    index_path = vault / managed_index_path("_knowledge")
+    log_path = vault / managed_log_path("_knowledge")
     assert index_path.exists()
     assert log_path.exists()
     index_body = index_path.read_text(encoding="utf-8")
@@ -246,7 +246,7 @@ def test_search_returns_compiled_note_after_apply(knowledge_env):
     results = searcher.search("Transformer attention", limit=10, mode="note")
 
     compiled_rel = managed_note_path(
-        "_compiled",
+        "_knowledge",
         KnowledgeNoteKind.SOURCE_SUMMARY,
         "source-attention",
         "bundle-001",
@@ -295,8 +295,8 @@ def test_apply_proposal_rolls_back_when_reindex_fails(knowledge_env):
     proposal = rollback_service.get_proposal(proposal_id)
     assert proposal["status"] == "pending"
     assert not (env["vault"] / proposal["target_path"]).exists()
-    assert not (env["vault"] / managed_index_path("_compiled")).exists()
-    assert not (env["vault"] / managed_log_path("_compiled")).exists()
+    assert not (env["vault"] / managed_index_path("_knowledge")).exists()
+    assert not (env["vault"] / managed_log_path("_knowledge")).exists()
 
 
 def test_reject_proposal_marks_status_and_logs(knowledge_env):
@@ -309,7 +309,7 @@ def test_reject_proposal_marks_status_and_logs(knowledge_env):
     assert refreshed["reviewer_action"]["action"] == "reject"
     assert refreshed["reviewer_action"]["reason"] == "not relevant"
 
-    log_body = (vault / managed_log_path("_compiled")).read_text(encoding="utf-8")
+    log_body = (vault / managed_log_path("_knowledge")).read_text(encoding="utf-8")
     assert f"reject :: proposal #{proposal_id}" in log_body
     assert "not relevant" in log_body
 
@@ -322,7 +322,7 @@ def test_overview_reports_counts_and_recent_proposals(knowledge_env):
     service.compile_bundle("bundle-001")
 
     overview = service.overview()
-    assert overview["managed_root"] == "_compiled"
+    assert overview["managed_root"] == "_knowledge"
     assert overview["counts"].get("pending") == 1
     assert len(overview["recent_proposals"]) == 1
     assert overview["recent_proposals"][0]["note_kind"] == "source_summary"
@@ -364,8 +364,8 @@ def test_source_summary_paths_are_scoped_by_bundle(knowledge_env, tmp_path):
     first_path = service.get_proposal(first.proposal_ids[0])["target_path"]
     second_path = service.get_proposal(second.proposal_ids[0])["target_path"]
 
-    assert first_path == "_compiled/sources/bundle-001/source-attention.md"
-    assert second_path == "_compiled/sources/bundle-002/source-attention.md"
+    assert first_path == "_knowledge/sources/bundle-001/source-attention.md"
+    assert second_path == "_knowledge/sources/bundle-002/source-attention.md"
     assert first_path != second_path
 
 

@@ -81,7 +81,7 @@ def managed_note_path(
     *parents: str,
 ) -> str:
     """Return the managed relative posix path for a compiled note."""
-    root = (managed_root or "_compiled").strip("/")
+    root = (managed_root or "_knowledge").strip("/")
     directory = kind_directory(kind)
     path = PurePosixPath(root) / directory
     for parent in parents:
@@ -92,12 +92,12 @@ def managed_note_path(
 
 
 def managed_index_path(managed_root: str) -> str:
-    root = (managed_root or "_compiled").strip("/")
+    root = (managed_root or "_knowledge").strip("/")
     return str(PurePosixPath(root) / "index.md")
 
 
 def managed_log_path(managed_root: str) -> str:
-    root = (managed_root or "_compiled").strip("/")
+    root = (managed_root or "_knowledge").strip("/")
     return str(PurePosixPath(root) / "log.md")
 
 

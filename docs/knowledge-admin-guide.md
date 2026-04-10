@@ -114,7 +114,7 @@ This is the best screen for answering: “what changed, and where should I look 
 Use `Logs` when you need the append-only operational trail directly.
 
 - it shows parsed log entries for quick reading
-- it also shows the raw `_compiled/log.md` contents
+- it also shows the raw `_knowledge/log.md` contents
 - this is the lowest-level built-in audit view for knowledge review activity
 
 ![Logs](assets/knowledge-admin-guide/logs.png)
