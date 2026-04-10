@@ -5,14 +5,19 @@ All notable changes to Synapse are documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-04-10
+
+This release closes the gap called out in the 0.2.0 notes ("no MCP parity
+yet") by exposing the full compiled knowledge layer — the review, apply, and
+inspection workflow operators drive through the admin console — over MCP.
+Agent-driven and human-driven flows now share one code path. The layer is
+still opt-in: set `knowledge.enabled = true` (or `SYNAPSE_KNOWLEDGE_ENABLED=true`)
+to turn it on.
 
 ### Added
-- **MCP parity for the compiled knowledge layer.** The review/apply workflow
-  that previously lived only behind HTTP and the admin UI is now reachable via
-  stdio MCP. Nine new tools wrap the same `service_api` entry points the admin
-  console already uses, so agent-driven and human-driven flows share one code
-  path:
+- **MCP parity for the compiled knowledge layer.** Nine new tools wrap the
+  same `service_api` entry points the admin console already uses, so
+  agent-driven and human-driven flows share one code path:
   - `synapse_ingest_bundle` — ingest a prepared research source bundle JSON.
   - `synapse_knowledge_overview` — managed root, status counts, recent proposals.
   - `synapse_knowledge_compile_bundle` — turn an ingested bundle into pending
@@ -100,4 +105,5 @@ written, so existing deployments are unaffected.
 - All markdown bodies are rendered deterministically from already-indexed source
   fields; there is no model/Cipher dependency on the core compile/apply path.
 
+[0.3.0]: https://github.com/netlooker/synapse/releases/tag/v0.3.0
 [0.2.0]: https://github.com/netlooker/synapse/releases/tag/v0.2.0
