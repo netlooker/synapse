@@ -97,6 +97,17 @@ class CipherSettings:
 
 
 @dataclass(frozen=True)
+class KnowledgeSettings:
+    """Settings for the optional compiled knowledge layer."""
+
+    enabled: bool = False
+    managed_root: str = "_knowledge"
+    default_status: str = "draft"
+    generated_by: str = "synapse"
+    auto_compile_on_ingest: bool = False
+
+
+@dataclass(frozen=True)
 class AppSettings:
     config_path: Path | None = None
     vault: VaultSettings = field(default_factory=VaultSettings)
@@ -105,6 +116,7 @@ class AppSettings:
     search: SearchSettings = field(default_factory=SearchSettings)
     vector_store: VectorStoreSettings = field(default_factory=VectorStoreSettings)
     cipher: CipherSettings = field(default_factory=CipherSettings)
+    knowledge: KnowledgeSettings = field(default_factory=KnowledgeSettings)
     embedding_providers: dict[str, ProviderSettings] = field(default_factory=dict)
 
     def embedding_provider(self, name: str | None = None) -> ProviderSettings:
@@ -131,6 +143,7 @@ def load_settings(config_path: str | Path | None = None) -> AppSettings:
     search = raw.get("search", {})
     vector_store = raw.get("vector_store", {})
     cipher = raw.get("cipher", {})
+    knowledge = raw.get("knowledge", {})
     providers = raw.get("providers", {}).get("embeddings", {})
 
     embedding_providers = {
@@ -197,10 +210,31 @@ def load_settings(config_path: str | Path | None = None) -> AppSettings:
                 cipher.get("stub_review_timeout_seconds", cipher.get("default_timeout_seconds", 45.0))
             ),
         ),
+        knowledge=KnowledgeSettings(
+            enabled=_coerce_bool(
+                os.environ.get("SYNAPSE_KNOWLEDGE_ENABLED", knowledge.get("enabled", False))
+            ),
+            managed_root=str(knowledge.get("managed_root", "_knowledge")).strip() or "_knowledge",
+            default_status=str(knowledge.get("default_status", "draft")) or "draft",
+            generated_by=str(knowledge.get("generated_by", "synapse")) or "synapse",
+            auto_compile_on_ingest=_coerce_bool(
+                knowledge.get("auto_compile_on_ingest", False)
+            ),
+        ),
         embedding_providers=embedding_providers,
     )
 
     return _apply_provider_env_overrides(settings)
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
 
 
 def _apply_provider_env_overrides(settings: AppSettings) -> AppSettings:
@@ -234,6 +268,7 @@ def _apply_provider_env_overrides(settings: AppSettings) -> AppSettings:
         search=settings.search,
         vector_store=settings.vector_store,
         cipher=settings.cipher,
+        knowledge=settings.knowledge,
         embedding_providers=updated,
     )
 

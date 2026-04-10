@@ -95,9 +95,15 @@ Current routes:
 - `GET /health`
 - `GET /cipher/health`
 - `POST /index`
+- `POST /ingest-bundle`
 - `POST /search`
 - `POST /discover`
 - `POST /validate`
+- `POST /knowledge/compile/bundle`
+- `GET /knowledge/overview`
+- `GET /knowledge/proposals`
+- `POST /knowledge/proposals/{proposal_id}/apply`
+- `POST /knowledge/proposals/{proposal_id}/reject`
 - `POST /cipher/audit`
 - `POST /cipher/explain`
 - `POST /cipher/chunking-strategy`

@@ -48,6 +48,41 @@ def test_load_settings_reads_pplx_06b_provider_defaults():
     assert settings.cipher.stub_review_timeout_seconds == 45.0
     assert settings.vault.root == "~/notes"
     assert settings.database.path == "~/notes/.synapse.sqlite"
+    # Knowledge layer is opt-in and inert by default.
+    assert settings.knowledge.enabled is False
+    assert settings.knowledge.managed_root == "_knowledge"
+    assert settings.knowledge.default_status == "draft"
+    assert settings.knowledge.generated_by == "synapse"
+    assert settings.knowledge.auto_compile_on_ingest is False
+
+
+def test_knowledge_settings_honor_toml_overrides(tmp_path):
+    config = tmp_path / "synapse.toml"
+    config.write_text(
+        """
+[knowledge]
+enabled = true
+managed_root = "knowledge"
+default_status = "review"
+generated_by = "test-runner"
+auto_compile_on_ingest = true
+""".strip(),
+        encoding="utf-8",
+    )
+    settings = load_settings(str(config))
+    assert settings.knowledge.enabled is True
+    assert settings.knowledge.managed_root == "knowledge"
+    assert settings.knowledge.default_status == "review"
+    assert settings.knowledge.generated_by == "test-runner"
+    assert settings.knowledge.auto_compile_on_ingest is True
+
+
+def test_knowledge_enabled_env_override(tmp_path, monkeypatch):
+    config = tmp_path / "synapse.toml"
+    config.write_text("[knowledge]\nenabled = false\n", encoding="utf-8")
+    monkeypatch.setenv("SYNAPSE_KNOWLEDGE_ENABLED", "true")
+    settings = load_settings(str(config))
+    assert settings.knowledge.enabled is True
 
 
 def test_load_settings_uses_generic_defaults_without_config(tmp_path, monkeypatch):

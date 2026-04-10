@@ -84,6 +84,16 @@ class SynapseTimeoutError(SynapseError):
         )
 
 
+class SynapseConflictError(SynapseError):
+    def __init__(self, message: str):
+        super().__init__(
+            message=message,
+            error_type="conflict",
+            status_code=409,
+            retryable=False,
+        )
+
+
 class SynapseUnavailableError(SynapseError):
     def __init__(self, message: str, *, dependency: str | None = None):
         super().__init__(

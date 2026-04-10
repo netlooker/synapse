@@ -15,6 +15,10 @@ def test_export_openapi_spec_writes_expected_routes(tmp_path):
     payload = json.loads(destination.read_text(encoding="utf-8"))
     assert payload["info"]["title"] == "Synapse API"
     assert "/search" in payload["paths"]
+    assert "/ingest-bundle" in payload["paths"]
+    assert "/knowledge/overview" in payload["paths"]
+    assert "/ui/knowledge/bundles/{bundle_id}" in payload["paths"]
+    assert "/ui/knowledge/operations" in payload["paths"]
     assert "/cipher/explain" in payload["paths"]
 
 
@@ -26,3 +30,6 @@ def test_tracked_openapi_export_is_valid_json():
     payload = json.loads(tracked.read_text(encoding="utf-8"))
     assert payload["info"]["title"] == "Synapse API"
     assert "/health" in payload["paths"]
+    assert "/knowledge/overview" in payload["paths"]
+    assert "/ui/knowledge/bundles/{bundle_id}" in payload["paths"]
+    assert "/ui/knowledge/operations" in payload["paths"]
