@@ -20,18 +20,33 @@ from .cipher_service import (
     StubCandidate,
     SuggestChunkingStrategyRequest,
 )
-from .errors import SynapseError
+from .errors import SynapseError, SynapseNotFoundError
 from .service_api import (
     DiscoverRequest,
     HealthRequest,
     IndexRequest,
+    IngestBundleRequest,
+    KnowledgeBundleDetailRequest,
+    KnowledgeCompileBundleRequest,
+    KnowledgeOverviewRequest,
+    KnowledgeProposalActionRequest,
+    KnowledgeProposalListRequest,
+    KnowledgeSourceDetailRequest,
     SearchRequest,
     ValidateRequest,
     WorkspaceIndexRequest,
     WorkspaceSearchRequest,
+    apply_knowledge_proposal,
+    compile_knowledge_bundle,
     discover_index,
     index_vault_for_workspace,
     index_vault,
+    ingest_bundle_artifact,
+    knowledge_bundle_detail,
+    knowledge_overview,
+    knowledge_source_detail,
+    list_knowledge_proposals,
+    reject_knowledge_proposal,
     resolve_runtime,
     runtime_requirements as service_runtime_requirements,
     runtime_requirements_for_workspace as service_runtime_requirements_for_workspace,
@@ -616,6 +631,231 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
             config_path=config_path,
         )
 
+    # ------------------------------------------------------------------
+    # Research bundle ingest
+    # ------------------------------------------------------------------
+
+    @mcp.tool(
+        name="synapse_ingest_bundle",
+        description=(
+            "Ingest a prepared research source bundle JSON artifact into Synapse. "
+            "bundle_path must be a plain string filesystem path to the prepared bundle. "
+            "Sources and their chunks are written to the vector store so they can be compiled "
+            "into managed knowledge notes through the synapse_knowledge_* tools."
+        ),
+    )
+    def synapse_ingest_bundle(
+        bundle_path: RequiredPlainPathArg,
+        config_path: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+        provider: str | None = None,
+    ) -> dict[str, Any]:
+        return ingest_bundle_artifact(
+            IngestBundleRequest(
+                bundle_path=bundle_path,
+                config_path=config_path,
+                db_path=db_path,
+                provider=provider,
+            )
+        ).model_dump()
+
+    # ------------------------------------------------------------------
+    # Compiled knowledge layer (opt-in — requires knowledge.enabled = true)
+    # ------------------------------------------------------------------
+
+    @mcp.tool(
+        name="synapse_knowledge_overview",
+        description=(
+            "Return the compiled knowledge layer overview: managed_root, vault_root, "
+            "status counts, and recent proposals. Matches the /ui/knowledge/ home page. "
+            "Requires knowledge.enabled = true in settings."
+        ),
+    )
+    def synapse_knowledge_overview(
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return knowledge_overview(
+            KnowledgeOverviewRequest(
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            )
+        ).model_dump()
+
+    @mcp.tool(
+        name="synapse_knowledge_compile_bundle",
+        description=(
+            "Compile an ingested research bundle into pending source_summary proposals. "
+            "Returns the job id and the list of created proposal ids. Proposals are not "
+            "written to disk until they are applied via synapse_knowledge_apply_proposal. "
+            "Requires knowledge.enabled = true in settings."
+        ),
+    )
+    def synapse_knowledge_compile_bundle(
+        bundle_id: str,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return compile_knowledge_bundle(
+            KnowledgeCompileBundleRequest(
+                bundle_id=bundle_id,
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            )
+        ).model_dump()
+
+    @mcp.tool(
+        name="synapse_knowledge_list_proposals",
+        description=(
+            "List compiled knowledge proposals. Filter by status (pending/applied/rejected) "
+            "and optionally cap the result count. Matches the /ui/knowledge/proposals review queue. "
+            "Requires knowledge.enabled = true in settings."
+        ),
+    )
+    def synapse_knowledge_list_proposals(
+        status: str | None = None,
+        limit: int | None = None,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return list_knowledge_proposals(
+            KnowledgeProposalListRequest(
+                status=status,
+                limit=limit,
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            )
+        ).model_dump()
+
+    @mcp.tool(
+        name="synapse_knowledge_get_proposal",
+        description=(
+            "Return the full compiled knowledge proposal detail for a specific id: "
+            "frontmatter, body markdown, supporting refs, and reviewer action history. "
+            "Matches the /ui/knowledge/proposals/{id} review-item page. "
+            "Requires knowledge.enabled = true in settings."
+        ),
+    )
+    def synapse_knowledge_get_proposal(
+        proposal_id: int,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        listing = list_knowledge_proposals(
+            KnowledgeProposalListRequest(
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            )
+        )
+        for item in listing.proposals:
+            if item.id == proposal_id:
+                return item.model_dump()
+        raise SynapseNotFoundError(f"Proposal not found: {proposal_id}")
+
+    @mcp.tool(
+        name="synapse_knowledge_apply_proposal",
+        description=(
+            "Apply a pending compiled knowledge proposal. Writes the managed note to disk, "
+            "updates index.md and log.md, then reindexes the affected files. Returns the "
+            "written path and the list of reindexed files. Requires knowledge.enabled = true."
+        ),
+    )
+    def synapse_knowledge_apply_proposal(
+        proposal_id: int,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return apply_knowledge_proposal(
+            proposal_id,
+            KnowledgeProposalActionRequest(
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            ),
+        ).model_dump()
+
+    @mcp.tool(
+        name="synapse_knowledge_reject_proposal",
+        description=(
+            "Reject a pending compiled knowledge proposal and append the reason to log.md. "
+            "An optional reason string is recorded in the reviewer action. "
+            "Requires knowledge.enabled = true in settings."
+        ),
+    )
+    def synapse_knowledge_reject_proposal(
+        proposal_id: int,
+        reason: str | None = None,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return reject_knowledge_proposal(
+            proposal_id,
+            KnowledgeProposalActionRequest(
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+                reason=reason,
+            ),
+        ).model_dump()
+
+    @mcp.tool(
+        name="synapse_knowledge_bundle_detail",
+        description=(
+            "Return bundle metadata plus every ingested source in the bundle with its "
+            "proposal and applied counts. Matches the /ui/knowledge/bundles/{bundle_id} page. "
+            "Requires knowledge.enabled = true in settings."
+        ),
+    )
+    def synapse_knowledge_bundle_detail(
+        bundle_id: str,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return knowledge_bundle_detail(
+            KnowledgeBundleDetailRequest(
+                bundle_id=bundle_id,
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            )
+        ).model_dump()
+
+    @mcp.tool(
+        name="synapse_knowledge_source_detail",
+        description=(
+            "Return a single source's normalized metadata, stored segments (summary/abstract/full_text), "
+            "and related proposals. Matches the /ui/knowledge/sources/{bundle_id}/{source_id} page. "
+            "Requires knowledge.enabled = true in settings."
+        ),
+    )
+    def synapse_knowledge_source_detail(
+        bundle_id: str,
+        source_id: str,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return knowledge_source_detail(
+            KnowledgeSourceDetailRequest(
+                bundle_id=bundle_id,
+                source_id=source_id,
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            )
+        ).model_dump()
+
     for tool_name in (
         "synapse_health",
         "synapse_health_simple",
@@ -629,6 +869,15 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         "synapse_discover",
         "synapse_validate",
         "synapse_health_for_workspace",
+        "synapse_ingest_bundle",
+        "synapse_knowledge_overview",
+        "synapse_knowledge_compile_bundle",
+        "synapse_knowledge_list_proposals",
+        "synapse_knowledge_get_proposal",
+        "synapse_knowledge_apply_proposal",
+        "synapse_knowledge_reject_proposal",
+        "synapse_knowledge_bundle_detail",
+        "synapse_knowledge_source_detail",
     ):
         _install_argument_normalizer(mcp, tool_name)
 
