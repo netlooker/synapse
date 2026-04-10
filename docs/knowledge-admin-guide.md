@@ -136,3 +136,29 @@ For debugging ingest/retrieval issues:
 2. Open the relevant `Bundle`.
 3. Open the `Source` page and inspect `Source chunks`.
 4. Then move to `Review`, `Operations`, and `Logs` as needed.
+
+## Agent Access via MCP
+
+Every operator capability above is also reachable from an MCP client, so the
+same review/apply workflow can be driven by an agent. The tools share the
+`service_api` layer with the HTTP routes and the admin UI — there is no
+parallel implementation to drift out of sync.
+
+| Admin UI surface | MCP tool |
+| --- | --- |
+| (ingest prepared bundle) | `synapse_ingest_bundle` |
+| Home | `synapse_knowledge_overview` |
+| Bundle detail | `synapse_knowledge_bundle_detail` |
+| Source detail and chunks | `synapse_knowledge_source_detail` |
+| (compile a bundle) | `synapse_knowledge_compile_bundle` |
+| Review queue | `synapse_knowledge_list_proposals` |
+| Review item | `synapse_knowledge_get_proposal` |
+| Apply button | `synapse_knowledge_apply_proposal` |
+| Reject button | `synapse_knowledge_reject_proposal` |
+
+All knowledge tools honor the `knowledge.enabled` feature gate. If the flag is
+off, each tool raises a structured bad-request error pointing at the setting,
+and no managed files are written — the same behavior as the HTTP API. The
+tools reuse the existing path-normalization logic, so agents can pass plain
+string `config_path` / `vault_root` / `db_path` overrides without encoding them
+into collapsed argument blobs.

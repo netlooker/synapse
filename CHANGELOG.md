@@ -5,6 +5,33 @@ All notable changes to Synapse are documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **MCP parity for the compiled knowledge layer.** The review/apply workflow
+  that previously lived only behind HTTP and the admin UI is now reachable via
+  stdio MCP. Nine new tools wrap the same `service_api` entry points the admin
+  console already uses, so agent-driven and human-driven flows share one code
+  path:
+  - `synapse_ingest_bundle` — ingest a prepared research source bundle JSON.
+  - `synapse_knowledge_overview` — managed root, status counts, recent proposals.
+  - `synapse_knowledge_compile_bundle` — turn an ingested bundle into pending
+    source_summary proposals.
+  - `synapse_knowledge_list_proposals` — filter the review queue by status.
+  - `synapse_knowledge_get_proposal` — full proposal detail (frontmatter, body,
+    supporting refs, reviewer action).
+  - `synapse_knowledge_apply_proposal` — write the managed note, update
+    `index.md`/`log.md`, and reindex.
+  - `synapse_knowledge_reject_proposal` — mark a proposal rejected and append
+    the reason to `log.md`.
+  - `synapse_knowledge_bundle_detail` — bundle metadata plus per-source
+    proposal/applied counts.
+  - `synapse_knowledge_source_detail` — normalized source metadata with stored
+    segments and related proposals.
+  - Every knowledge tool enforces the same `knowledge.enabled` feature gate as
+    the HTTP API — when disabled, the tool raises a structured bad-request
+    error pointing operators at the setting.
+
 ## [0.2.0] - 2026-04-10
 
 This release introduces the optional compiled knowledge layer and its operator
