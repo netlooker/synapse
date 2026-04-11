@@ -5,6 +5,13 @@ All notable changes to Synapse are documented in this file.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- OpenAPI metadata now reports the current package version instead of the stale
+  `0.1.0` value, and the tracked export has a regression test to catch future
+  version drift.
+
 ## [0.3.0] - 2026-04-10
 
 This release closes the gap called out in the 0.2.0 notes ("no MCP parity
@@ -105,5 +112,6 @@ written, so existing deployments are unaffected.
 - All markdown bodies are rendered deterministically from already-indexed source
   fields; there is no model/Cipher dependency on the core compile/apply path.
 
+[Unreleased]: https://github.com/netlooker/synapse/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/netlooker/synapse/releases/tag/v0.3.0
 [0.2.0]: https://github.com/netlooker/synapse/releases/tag/v0.2.0

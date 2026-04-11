@@ -2,9 +2,39 @@
 
 from __future__ import annotations
 
+import tomllib
+from importlib.metadata import PackageNotFoundError, version as _package_version
 from pathlib import Path
 
 from pydantic import BaseModel
+
+
+def _resolve_synapse_version() -> str:
+    """Return the authoritative Synapse version.
+
+    Prefers ``pyproject.toml`` when running from an editable install or source
+    checkout, because editable installs do not refresh their metadata when the
+    version in ``pyproject.toml`` is bumped. Falls back to the installed
+    package metadata for wheel installs where ``pyproject.toml`` is not
+    shipped but the version is baked into ``PKG-INFO`` at build time.
+    """
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            with pyproject.open("rb") as handle:
+                data = tomllib.load(handle)
+        except (OSError, tomllib.TOMLDecodeError):  # pragma: no cover - defensive
+            data = {}
+        version = data.get("project", {}).get("version")
+        if isinstance(version, str) and version:
+            return version
+    try:
+        return _package_version("synapse")
+    except PackageNotFoundError:  # pragma: no cover - uninstalled source checkout
+        return "0.0.0+unknown"
+
+
+_SYNAPSE_VERSION = _resolve_synapse_version()
 
 try:  # pragma: no cover - exercised by runtime install path
     from fastapi.responses import HTMLResponse, RedirectResponse
@@ -123,7 +153,7 @@ def create_app(cipher_service: CipherService | None = None):
     app = FastAPI(
         title="Synapse API",
         summary="HTTP and OpenAPI interface for Synapse retrieval and Cipher reasoning.",
-        version="0.1.0",
+        version=_SYNAPSE_VERSION,
         description=(
             "Expose Synapse indexing, search, discovery, validation, and Cipher operations "
             "over JSON/HTTP for PWAs and other web clients."
