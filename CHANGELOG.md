@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-04-11
+
 ### Fixed
 - OpenAPI metadata now reports the current package version instead of the stale
   `0.1.0` value, and the tracked export has a regression test to catch future
@@ -112,6 +114,7 @@ written, so existing deployments are unaffected.
 - All markdown bodies are rendered deterministically from already-indexed source
   fields; there is no model/Cipher dependency on the core compile/apply path.
 
-[Unreleased]: https://github.com/netlooker/synapse/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/netlooker/synapse/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/netlooker/synapse/releases/tag/v0.3.1
 [0.3.0]: https://github.com/netlooker/synapse/releases/tag/v0.3.0
 [0.2.0]: https://github.com/netlooker/synapse/releases/tag/v0.2.0

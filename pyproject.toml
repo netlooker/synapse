@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "synapse"
-version = "0.3.0"
+version = "0.3.1"
 description = "Semantic retrieval and discovery engine for markdown knowledge bases"
 readme = "README.md"
 requires-python = ">=3.12"
