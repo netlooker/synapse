@@ -47,6 +47,7 @@ from .service_api import (
     knowledge_source_detail,
     list_knowledge_proposals,
     reject_knowledge_proposal,
+    revert_knowledge_proposal,
     resolve_runtime,
     runtime_requirements as service_runtime_requirements,
     runtime_requirements_for_workspace as service_runtime_requirements_for_workspace,
@@ -649,6 +650,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         config_path: OptionalPlainPathArg = None,
         db_path: OptionalPlainPathArg = None,
         provider: str | None = None,
+        replace_existing: bool = False,
     ) -> dict[str, Any]:
         return ingest_bundle_artifact(
             IngestBundleRequest(
@@ -656,6 +658,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
                 config_path=config_path,
                 db_path=db_path,
                 provider=provider,
+                replace_existing=replace_existing,
             )
         ).model_dump()
 
@@ -809,6 +812,29 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         ).model_dump()
 
     @mcp.tool(
+        name="synapse_knowledge_revert_proposal",
+        description=(
+            "Revert an applied compiled knowledge proposal back to pending review. "
+            "Restores the previous on-disk note content when available, updates index.md and log.md, "
+            "then reindexes the affected managed files. Requires knowledge.enabled = true."
+        ),
+    )
+    def synapse_knowledge_revert_proposal(
+        proposal_id: int,
+        config_path: OptionalPlainPathArg = None,
+        vault_root: OptionalPlainPathArg = None,
+        db_path: OptionalPlainPathArg = None,
+    ) -> dict[str, Any]:
+        return revert_knowledge_proposal(
+            proposal_id,
+            KnowledgeProposalActionRequest(
+                config_path=config_path,
+                vault_root=vault_root,
+                db_path=db_path,
+            ),
+        ).model_dump()
+
+    @mcp.tool(
         name="synapse_knowledge_bundle_detail",
         description=(
             "Return bundle metadata plus every ingested source in the bundle with its "
@@ -876,6 +902,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         "synapse_knowledge_get_proposal",
         "synapse_knowledge_apply_proposal",
         "synapse_knowledge_reject_proposal",
+        "synapse_knowledge_revert_proposal",
         "synapse_knowledge_bundle_detail",
         "synapse_knowledge_source_detail",
     ):

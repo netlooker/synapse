@@ -25,8 +25,9 @@ def test_ingest_bundle_artifact_uses_shared_runtime(monkeypatch, tmp_path):
             calls["db"] = db
             calls["embedding_client"] = embedding_client
 
-        def ingest_bundle_file(self, path: Path):
+        def ingest_bundle_file(self, path: Path, *, replace_existing: bool = False):
             calls["bundle_path"] = path
+            calls["replace_existing"] = replace_existing
 
             class Result:
                 bundle_id = "bundle-123"
@@ -34,12 +35,13 @@ def test_ingest_bundle_artifact_uses_shared_runtime(monkeypatch, tmp_path):
                 replaced_existing = True
                 source_count = 2
                 segment_count = 7
+                skipped_duplicate_count = 1
 
             return Result()
 
     monkeypatch.setattr("synapse.service_api.create_vector_store", lambda settings, db_path=None, embedding_dim=None: FakeStore())
     monkeypatch.setattr("synapse.service_api.ResearchBundleIngestor", FakeIngestor)
-    monkeypatch.setattr("synapse.service_api.EmbeddingClient.from_provider", lambda provider: "embedder")
+    monkeypatch.setattr("synapse.service_api.EmbeddingClient.from_settings", lambda settings, provider_name=None: "embedder")
 
     response = ingest_bundle_artifact(
         IngestBundleRequest(
@@ -51,6 +53,7 @@ def test_ingest_bundle_artifact_uses_shared_runtime(monkeypatch, tmp_path):
     assert response.bundle_id == "bundle-123"
     assert response.replaced_existing is True
     assert response.segment_count == 7
+    assert response.skipped_duplicate_count == 1
     assert calls["initialized"] is True
     assert calls["closed"] is True
     assert calls["bundle_path"] == bundle_path

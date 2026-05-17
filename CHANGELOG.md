@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-05-17
+
+### Added
+- Applied-proposal reversion over the compiled knowledge layer via
+  `synapse_knowledge_revert_proposal` and the matching HTTP endpoint. Reverts
+  now restore or remove the managed note, rebuild `index.md`, append `log.md`,
+  and reindex the managed subtree while preserving the proposal audit trail.
+- A bundled Synapse skill under `.agents/skills/synapse/` documenting the
+  current MCP surface, compiled-knowledge workflow, dedupe behavior, and
+  embedding failover semantics.
+
+### Changed
+- Research bundle ingest now deduplicates sources by normalized URL identity
+  and content hash, skipping duplicates by default and allowing explicit
+  replacement with `replace_existing=true` / `--replace-existing`.
+- Prepared bundle normalization is now more tolerant of manual artifacts:
+  optional fields may be omitted, a single `source` object is accepted, and raw
+  text can arrive through `text`, `content`, `body`, or `markdown`.
+- Search, indexing, and ingest embedding calls now fail over from the primary
+  provider to a compatible named `fallback` provider when available, then to a
+  local in-process embedding adapter if remote providers are unavailable.
+
 ## [0.3.1] - 2026-04-11
 
 ### Fixed

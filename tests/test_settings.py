@@ -182,6 +182,30 @@ def test_embedding_client_selects_openai_compatible_adapter():
     assert isinstance(client.adapter, OpenAICompatibleEmbeddingAdapter)
 
 
+def test_embedding_client_from_settings_uses_local_fallback_when_primary_fails(monkeypatch, tmp_path):
+    config = tmp_path / "synapse.toml"
+    config.write_text(
+        "[providers.embeddings.default]\n"
+        "type = 'infinity'\n"
+        "model = 'broken-primary'\n"
+        "base_url = 'http://127.0.0.1:9999'\n"
+        "dimensions = 4\n",
+        encoding="utf-8",
+    )
+    settings = load_settings(str(config))
+
+    def fake_urlopen(_req):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr("synapse.providers.embeddings.base.request.urlopen", fake_urlopen)
+
+    client = EmbeddingClient.from_settings(settings, "default")
+    embedding = client.embed("fallback works")
+
+    assert len(embedding) == 4
+    assert any(value != 0.0 for value in embedding)
+
+
 def test_embedding_client_allows_explicit_context_strategy_override():
     client = EmbeddingClient(
         provider_type="infinity",

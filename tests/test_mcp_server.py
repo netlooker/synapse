@@ -100,6 +100,7 @@ def test_build_server_returns_fastmcp_instance():
     assert "synapse_knowledge_get_proposal" in tool_names
     assert "synapse_knowledge_apply_proposal" in tool_names
     assert "synapse_knowledge_reject_proposal" in tool_names
+    assert "synapse_knowledge_revert_proposal" in tool_names
     assert "synapse_knowledge_bundle_detail" in tool_names
     assert "synapse_knowledge_source_detail" in tool_names
 
@@ -598,6 +599,7 @@ def test_ingest_bundle_tool_delegates_to_service_api(monkeypatch):
             replaced_existing=False,
             source_count=3,
             segment_count=12,
+            skipped_duplicate_count=0,
         )
 
     monkeypatch.setattr("synapse.mcp_server.ingest_bundle_artifact", fake_ingest_bundle_artifact)

@@ -280,7 +280,7 @@ def main() -> None:
     try:
         searcher = Searcher(
             db=store,
-            embedding_client=EmbeddingClient.from_provider(provider),
+            embedding_client=EmbeddingClient.from_settings(settings, provider.name),
             search_settings=settings.search,
         )
         results = searcher.search(

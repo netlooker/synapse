@@ -58,6 +58,8 @@ class Database:
                 id INTEGER PRIMARY KEY,
                 bundle_row_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
                 source_id TEXT NOT NULL,
+                identity_key TEXT,
+                content_hash TEXT,
                 origin_url TEXT,
                 direct_paper_url TEXT,
                 title TEXT,
@@ -195,6 +197,12 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_sources_bundle_row_id ON sources(bundle_row_id)
         """)
         cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sources_identity_key ON sources(identity_key)
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_sources_content_hash ON sources(content_hash)
+        """)
+        cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_segments_owner_source_id ON segments(owner_source_id)
         """)
         cur.execute("""
@@ -205,6 +213,7 @@ class Database:
         """)
         
         self.conn.commit()
+        self._ensure_schema_migrations()
 
     def close(self) -> None:
         """Close database connection."""
@@ -310,6 +319,8 @@ class Database:
         bundle_row_id: int,
         source_id: str,
         *,
+        identity_key: str | None = None,
+        content_hash: str | None = None,
         origin_url: str | None = None,
         direct_paper_url: str | None = None,
         title: str | None = None,
@@ -331,14 +342,16 @@ class Database:
         cur = self.conn.cursor()
         cur.execute("""
             INSERT INTO sources (
-                bundle_row_id, source_id, origin_url, direct_paper_url, title, authors_json, published,
+                bundle_row_id, source_id, identity_key, content_hash, origin_url, direct_paper_url, title, authors_json, published,
                 source_type, retrieved_at, extraction_status, extraction_method, summary_text,
                 abstract_text, full_text, full_text_path, note_path, metadata_json, artifact_json
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             bundle_row_id,
             source_id,
+            identity_key,
+            content_hash,
             origin_url,
             direct_paper_url,
             title,
@@ -368,6 +381,8 @@ class Database:
                 s.id,
                 b.bundle_id,
                 s.source_id,
+                s.identity_key,
+                s.content_hash,
                 s.origin_url,
                 s.direct_paper_url,
                 s.title,
@@ -407,6 +422,8 @@ class Database:
                 s.id,
                 b.bundle_id,
                 s.source_id,
+                s.identity_key,
+                s.content_hash,
                 s.origin_url,
                 s.direct_paper_url,
                 s.title,
@@ -439,6 +456,80 @@ class Database:
             source["artifact"] = _json_load(source.pop("artifact_json"), {})
             sources.append(source)
         return sources
+
+    def find_duplicate_source(
+        self,
+        *,
+        identity_keys: list[str],
+        content_hash: str | None,
+        exclude_bundle_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        conditions: list[str] = []
+        params: list[Any] = []
+        if identity_keys:
+            conditions.append(f"s.identity_key IN ({', '.join('?' for _ in identity_keys)})")
+            params.extend(identity_keys)
+        if content_hash:
+            conditions.append("s.content_hash = ?")
+            params.append(content_hash)
+        if not conditions:
+            return None
+
+        sql = """
+            SELECT
+                s.id,
+                b.bundle_id,
+                s.source_id,
+                s.identity_key,
+                s.content_hash,
+                s.origin_url,
+                s.direct_paper_url,
+                s.title,
+                s.authors_json,
+                s.published,
+                s.source_type,
+                s.retrieved_at,
+                s.extraction_status,
+                s.extraction_method,
+                s.summary_text,
+                s.abstract_text,
+                s.full_text,
+                s.full_text_path,
+                s.note_path,
+                s.metadata_json,
+                s.artifact_json,
+                s.imported_at
+            FROM sources s
+            JOIN bundles b ON b.id = s.bundle_row_id
+            WHERE ({conditions})
+        """.format(conditions=" OR ".join(conditions))
+        if exclude_bundle_id:
+            sql += " AND b.bundle_id != ?"
+            params.append(exclude_bundle_id)
+        sql += " ORDER BY s.imported_at DESC, s.id DESC LIMIT 1"
+
+        row = self.conn.cursor().execute(sql, params).fetchone()
+        if not row:
+            return None
+        source = dict(row)
+        source["authors"] = _json_load(source.pop("authors_json"), [])
+        source["metadata"] = _json_load(source.pop("metadata_json"), {})
+        source["artifact"] = _json_load(source.pop("artifact_json"), {})
+        return source
+
+    def delete_source(self, source_row_id: int, *, commit: bool = True) -> int:
+        cur = self.conn.cursor()
+        segment_rows = cur.execute(
+            "SELECT id FROM segments WHERE owner_source_id = ? OR source_row_id = ?",
+            (source_row_id, source_row_id),
+        ).fetchall()
+        for row in segment_rows:
+            self._delete_segment_indexes(row["id"], commit=False)
+        cur.execute("DELETE FROM sources WHERE id = ?", (source_row_id,))
+        deleted = cur.rowcount
+        if commit:
+            self.conn.commit()
+        return deleted
 
     def insert_note(
         self,
@@ -896,6 +987,20 @@ class Database:
             cur.execute("DELETE FROM vec_segments WHERE segment_id = ?", (segment_id,))
         if commit:
             self.conn.commit()
+
+    def _ensure_schema_migrations(self) -> None:
+        self._ensure_table_column("sources", "identity_key", "TEXT")
+        self._ensure_table_column("sources", "content_hash", "TEXT")
+        self.conn.commit()
+
+    def _ensure_table_column(self, table_name: str, column_name: str, column_sql: str) -> None:
+        columns = {
+            row["name"]
+            for row in self.conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        }
+        if column_name in columns:
+            return
+        self.conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}")
 
 
 def _serialize_f32(vec: list[float]) -> bytes:

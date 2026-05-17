@@ -317,6 +317,45 @@ def test_reject_proposal_marks_status_and_logs(knowledge_env):
         service.apply_proposal(proposal_id)
 
 
+def test_revert_proposal_restores_pending_state_and_updates_audit(knowledge_env):
+    service: KnowledgeService = knowledge_env["service"]
+    vault: Path = knowledge_env["vault"]
+    proposal_id = service.compile_bundle("bundle-001").proposal_ids[0]
+
+    apply_result = service.apply_proposal(proposal_id)
+    reverted = service.revert_proposal(proposal_id)
+
+    proposal = service.get_proposal(proposal_id)
+    assert proposal["status"] == "pending"
+    assert proposal["reviewer_action"]["action"] == "revert"
+    assert reverted.proposal_id == proposal_id
+    assert not Path(apply_result.written_path).exists()
+
+    index_body = (vault / managed_index_path("_knowledge")).read_text(encoding="utf-8")
+    log_body = (vault / managed_log_path("_knowledge")).read_text(encoding="utf-8")
+    assert "Attention Is All You Need" not in index_body
+    assert f"revert :: proposal #{proposal_id}" in log_body
+
+
+def test_revert_proposal_restores_previous_note_when_apply_overwrote_file(knowledge_env):
+    service: KnowledgeService = knowledge_env["service"]
+    vault: Path = knowledge_env["vault"]
+    target = vault / managed_note_path(
+        "_knowledge",
+        KnowledgeNoteKind.SOURCE_SUMMARY,
+        "source-attention",
+        "bundle-001",
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("# Existing\n\nkeep me\n", encoding="utf-8")
+
+    proposal_id = service.compile_bundle("bundle-001").proposal_ids[0]
+    service.apply_proposal(proposal_id)
+    service.revert_proposal(proposal_id)
+
+    assert target.read_text(encoding="utf-8") == "# Existing\n\nkeep me\n"
+
+
 def test_overview_reports_counts_and_recent_proposals(knowledge_env):
     service: KnowledgeService = knowledge_env["service"]
     service.compile_bundle("bundle-001")

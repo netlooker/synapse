@@ -36,6 +36,8 @@ class VectorStore(Protocol):
         bundle_row_id: int,
         source_id: str,
         *,
+        identity_key: str | None = None,
+        content_hash: str | None = None,
         origin_url: str | None = None,
         direct_paper_url: str | None = None,
         title: str | None = None,
@@ -56,6 +58,14 @@ class VectorStore(Protocol):
     ) -> int: ...
     def get_source(self, bundle_id: str, source_id: str) -> dict[str, Any] | None: ...
     def list_sources_for_bundle(self, bundle_id: str) -> list[dict[str, Any]]: ...
+    def find_duplicate_source(
+        self,
+        *,
+        identity_keys: list[str],
+        content_hash: str | None,
+        exclude_bundle_id: str | None = None,
+    ) -> dict[str, Any] | None: ...
+    def delete_source(self, source_row_id: int, *, commit: bool = True) -> int: ...
     def insert_note(
         self,
         *,
@@ -221,6 +231,22 @@ class SQLiteVecStore:
 
     def list_sources_for_bundle(self, bundle_id: str) -> list[dict[str, Any]]:
         return self.backend.list_sources_for_bundle(bundle_id)
+
+    def find_duplicate_source(
+        self,
+        *,
+        identity_keys: list[str],
+        content_hash: str | None,
+        exclude_bundle_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        return self.backend.find_duplicate_source(
+            identity_keys=identity_keys,
+            content_hash=content_hash,
+            exclude_bundle_id=exclude_bundle_id,
+        )
+
+    def delete_source(self, source_row_id: int, *, commit: bool = True) -> int:
+        return self.backend.delete_source(source_row_id, commit=commit)
 
     def insert_note(self, **kwargs: Any) -> int:
         return self.backend.insert_note(**kwargs)

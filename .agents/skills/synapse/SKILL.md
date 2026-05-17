@@ -1,0 +1,99 @@
+---
+name: synapse
+description: Semantic search, discovery, reasoning, research-bundle ingest, and compiled-knowledge review over markdown vaults via Synapse MCP tools.
+user-invocable: true
+disable-model-invocation: false
+---
+
+# Synapse MCP
+
+Synapse is a semantic retrieval, discovery, and compiled-knowledge engine for markdown knowledge bases. It indexes markdown folders into embeddings, exposes deterministic search and validation over MCP, and can ingest prepared research bundles into reviewable `source_summary` proposals under a managed knowledge subtree.
+
+This skill documents the current MCP surface shipped by the `synapse` repo itself.
+
+## Available tools
+
+### Deterministic retrieval
+
+| Tool | Purpose | Key params |
+|------|---------|------------|
+| `synapse_health` | Check runtime readiness, DB status, provider config | optional overrides |
+| `synapse_index` | Index a markdown folder into the vector store | `vault_root`, `db_path` |
+| `synapse_search` | Semantic search across indexed content | `query`, `mode`, `limit` |
+| `synapse_discover` | Find unlinked but semantically related documents | `threshold`, `max_total` |
+| `synapse_validate` | Report broken `[[wikilinks]]` in indexed vault | optional overrides |
+| `synapse_health_for_workspace` | Check readiness for the configured active workspace | `workspace` |
+| `synapse_index_for_workspace` | Index the configured active workspace | `workspace` |
+| `synapse_search_for_workspace` | Search the configured active workspace | `workspace`, `query`, `mode`, `limit` |
+
+### Strict-shape local-model facade
+
+| Tool | Purpose | Required params |
+|------|---------|-----------------|
+| `synapse_health_simple` | Minimal health probe | `vault_root`, `db_path` |
+| `synapse_index_simple` | Minimal index call | `vault_root`, `db_path` |
+| `synapse_search_simple` | Minimal search call | `query`, `db_path` |
+
+### Reasoning via Cipher
+
+| Tool | Purpose | Key params |
+|------|---------|------------|
+| `synapse_cipher_health` | Report Cipher runtime requirements and readiness | optional overrides |
+| `synapse_cipher_audit` | Audit vault integrity | `mode` |
+| `synapse_cipher_explain` | Explain why two documents are related | `doc_a`, `doc_b` |
+| `synapse_cipher_chunking_strategy` | Recommend chunking parameters for a model | optional overrides |
+| `synapse_cipher_review_stubs` | Review proposed stub notes before creation | candidates |
+
+### Compiled knowledge layer
+
+| Tool | Purpose | Required params |
+|------|---------|-----------------|
+| `synapse_ingest_bundle` | Ingest a prepared research source bundle JSON | `bundle_path` |
+| `synapse_knowledge_overview` | Managed-root status, counts, recent proposals | — |
+| `synapse_knowledge_compile_bundle` | Turn an ingested bundle into pending `source_summary` proposals | `bundle_id` |
+| `synapse_knowledge_list_proposals` | Filter review queue by `status` | optional `status`, `limit` |
+| `synapse_knowledge_get_proposal` | Full proposal detail | `proposal_id` |
+| `synapse_knowledge_apply_proposal` | Apply a pending proposal | `proposal_id` |
+| `synapse_knowledge_reject_proposal` | Reject a pending proposal and append reason to `log.md` | `proposal_id` |
+| `synapse_knowledge_revert_proposal` | Revert an applied proposal back to pending review | `proposal_id` |
+| `synapse_knowledge_bundle_detail` | Bundle metadata plus per-source proposal counts | `bundle_id` |
+| `synapse_knowledge_source_detail` | Normalized source metadata, stored segments, related proposals | `bundle_id`, `source_id` |
+
+## Search modes
+
+- `research`: blended source-first retrieval, usually the default and best starting point
+- `source`: return source-oriented matches
+- `note`: return note-oriented matches
+- `evidence`: return narrow evidence matches
+
+Prefer `research` unless the task specifically wants note-only or evidence-only output.
+
+## Knowledge workflow
+
+1. Ingest a prepared bundle with `synapse_ingest_bundle`.
+2. Compile it with `synapse_knowledge_compile_bundle`.
+3. Review candidates with `synapse_knowledge_list_proposals` and `synapse_knowledge_get_proposal`.
+4. Apply, reject, or revert with the proposal action tools.
+5. Use `synapse_knowledge_overview`, bundle detail, and source detail for provenance and status.
+
+Guardrails:
+
+- do not hand-edit the managed root
+- use `synapse_knowledge_revert_proposal` to undo an applied note while preserving audit history
+- rejected proposals stay visible as audit records
+
+## Bundle ingest guidance
+
+- bundles may omit optional metadata fields
+- ingest accepts `sources`, `prepared_sources`, or a single `source`
+- source text can arrive through `text`, `content`, `body`, or `markdown`
+- duplicate sources are skipped by default using URL identity and content-hash checks
+- pass `replace_existing=true` to replace an already ingested duplicate source
+
+## Embedding behavior
+
+- Synapse tries the configured provider first
+- if a compatible named `fallback` provider exists, it tries that next
+- if remote providers fail, it falls back to a local in-process embedding adapter
+
+This keeps indexing and search available during provider outages, though retrieval quality may differ from the primary model.

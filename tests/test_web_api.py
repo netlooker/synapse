@@ -19,6 +19,7 @@ from synapse.service_api import (
     KnowledgeProposalDetail,
     KnowledgeProposalListResponse,
     KnowledgeProposalSummary,
+    KnowledgeRevertResponse,
     KnowledgeSourceSegment,
     KnowledgeRejectResponse,
     KnowledgeSourceDetailResponse,
@@ -62,6 +63,7 @@ def test_openapi_exposes_synapse_and_cipher_routes():
     assert "/knowledge/proposals" in payload["paths"]
     assert "/knowledge/proposals/{proposal_id}/apply" in payload["paths"]
     assert "/knowledge/proposals/{proposal_id}/reject" in payload["paths"]
+    assert "/knowledge/proposals/{proposal_id}/revert" in payload["paths"]
     assert "/ui/knowledge/sources" in payload["paths"]
     assert "/ui/knowledge/bundles/{bundle_id}" in payload["paths"]
     assert "/ui/knowledge/library" in payload["paths"]
@@ -154,6 +156,7 @@ def test_ingest_bundle_endpoint_uses_shared_service(monkeypatch):
         replaced_existing=False,
         source_count=2,
         segment_count=5,
+        skipped_duplicate_count=0,
     )
 
     def fake_ingest_bundle_artifact(request):
@@ -220,12 +223,23 @@ def test_knowledge_json_routes_use_shared_services(monkeypatch):
         ],
     )
     reject_response = KnowledgeRejectResponse(proposal=proposal_detail.model_copy(update={"status": "rejected"}))
+    revert_response = KnowledgeRevertResponse(
+        proposal_id=11,
+        target_path="_knowledge/sources/bundle-001/source-attention.md",
+        reverted_path="/tmp/vault/_knowledge/sources/bundle-001/source-attention.md",
+        reindexed_files=[
+            "_knowledge/sources/bundle-001/source-attention.md",
+            "_knowledge/index.md",
+            "_knowledge/log.md",
+        ],
+    )
 
     monkeypatch.setattr("synapse.web_api.compile_knowledge_bundle", lambda request: compile_response)
     monkeypatch.setattr("synapse.web_api.knowledge_overview", lambda request: overview_response)
     monkeypatch.setattr("synapse.web_api.list_knowledge_proposals", lambda request: proposal_list_response)
     monkeypatch.setattr("synapse.web_api.apply_knowledge_proposal", lambda proposal_id, request: apply_response)
     monkeypatch.setattr("synapse.web_api.reject_knowledge_proposal", lambda proposal_id, request: reject_response)
+    monkeypatch.setattr("synapse.web_api.revert_knowledge_proposal", lambda proposal_id, request: revert_response)
 
     app = create_app(cipher_service=CipherService(model=TestModel(custom_output_text="linked memory")))
     client = TestClient(app)
@@ -249,6 +263,10 @@ def test_knowledge_json_routes_use_shared_services(monkeypatch):
     reject_api = client.post("/knowledge/proposals/11/reject", json={"reason": "skip"})
     assert reject_api.status_code == 200
     assert reject_api.json()["proposal"]["status"] == "rejected"
+
+    revert_api = client.post("/knowledge/proposals/11/revert", json={})
+    assert revert_api.status_code == 200
+    assert revert_api.json()["proposal_id"] == 11
 
 
 def test_knowledge_ui_routes_render_and_redirect(monkeypatch, tmp_path):

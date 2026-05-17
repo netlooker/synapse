@@ -16,6 +16,7 @@ from .knowledge_service import (
     ApplyProposalResult,
     CompileBundleResult,
     KnowledgeService,
+    RevertProposalResult,
     build_indexer_factory,
 )
 from .research_ingest import ResearchBundleIngestor
@@ -96,6 +97,7 @@ class IngestBundleRequest(BaseModel):
     config_path: str | None = None
     db_path: str | None = None
     provider: str | None = None
+    replace_existing: bool = False
 
 
 class IngestBundleResponse(BaseModel):
@@ -106,6 +108,7 @@ class IngestBundleResponse(BaseModel):
     replaced_existing: bool
     source_count: int
     segment_count: int
+    skipped_duplicate_count: int = 0
 
 
 class SearchRequest(BaseModel):
@@ -295,6 +298,13 @@ class KnowledgeRejectResponse(BaseModel):
     proposal: KnowledgeProposalDetail
 
 
+class KnowledgeRevertResponse(BaseModel):
+    proposal_id: int
+    target_path: str
+    reverted_path: str
+    reindexed_files: list[str] = Field(default_factory=list)
+
+
 class KnowledgeSourceDetailRequest(BaseModel):
     bundle_id: str
     source_id: str
@@ -413,8 +423,8 @@ def index_vault(request: IndexRequest) -> IndexResponse:
         indexer = Indexer(
             db=store,
             vault_root=root,
-            note_embedding_client=EmbeddingClient.from_provider(note_cfg),
-            chunk_embedding_client=EmbeddingClient.from_provider(chunk_cfg),
+            note_embedding_client=EmbeddingClient.from_settings(settings, note_cfg.name),
+            chunk_embedding_client=EmbeddingClient.from_settings(settings, chunk_cfg.name),
             min_chunk_chars=settings.index.min_chunk_chars,
             max_chunk_chars=settings.index.max_chunk_chars,
             target_chunk_tokens=settings.index.target_chunk_tokens,
@@ -450,9 +460,12 @@ def ingest_bundle_artifact(request: IngestBundleRequest) -> IngestBundleResponse
     try:
         ingestor = ResearchBundleIngestor(
             db=store,
-            embedding_client=EmbeddingClient.from_provider(provider),
+            embedding_client=EmbeddingClient.from_settings(settings, provider.name),
         )
-        result = ingestor.ingest_bundle_file(bundle_path)
+        result = ingestor.ingest_bundle_file(
+            bundle_path,
+            replace_existing=request.replace_existing,
+        )
     finally:
         store.close()
 
@@ -464,6 +477,7 @@ def ingest_bundle_artifact(request: IngestBundleRequest) -> IngestBundleResponse
         replaced_existing=result.replaced_existing,
         source_count=result.source_count,
         segment_count=result.segment_count,
+        skipped_duplicate_count=result.skipped_duplicate_count,
     )
 
 
@@ -479,7 +493,7 @@ def search_index(request: SearchRequest) -> SearchResponse:
     try:
         searcher = Searcher(
             db=store,
-            embedding_client=EmbeddingClient.from_provider(provider),
+            embedding_client=EmbeddingClient.from_settings(settings, provider.name),
             search_settings=settings.search,
         )
         results = searcher.search(
@@ -718,6 +732,34 @@ def reject_knowledge_proposal(
     finally:
         store.close()
     return KnowledgeRejectResponse(proposal=_proposal_detail(proposal))
+
+
+def revert_knowledge_proposal(
+    proposal_id: int,
+    request: KnowledgeProposalActionRequest,
+) -> KnowledgeRevertResponse:
+    settings, root, db = _knowledge_service_context(
+        request.config_path, request.vault_root, request.db_path
+    )
+    store = _open_knowledge_store(settings, db)
+    try:
+        service = KnowledgeService(
+            store=store,
+            settings=settings,
+            vault_root=root,
+            indexer_factory=build_indexer_factory(
+                store=store, settings=settings, vault_root=root
+            ),
+        )
+        result = service.revert_proposal(proposal_id)
+    finally:
+        store.close()
+    return KnowledgeRevertResponse(
+        proposal_id=result.proposal_id,
+        target_path=result.target_path,
+        reverted_path=result.reverted_path,
+        reindexed_files=result.reindexed_files,
+    )
 
 
 def knowledge_source_detail(

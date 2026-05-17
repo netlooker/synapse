@@ -706,6 +706,11 @@
               }
             ],
             "title": "Provider"
+          },
+          "replace_existing": {
+            "default": false,
+            "title": "Replace Existing",
+            "type": "boolean"
           }
         },
         "required": [
@@ -738,6 +743,11 @@
           },
           "segment_count": {
             "title": "Segment Count",
+            "type": "integer"
+          },
+          "skipped_duplicate_count": {
+            "default": 0,
+            "title": "Skipped Duplicate Count",
             "type": "integer"
           },
           "source_count": {
@@ -1153,6 +1163,36 @@
           "proposal"
         ],
         "title": "KnowledgeRejectResponse",
+        "type": "object"
+      },
+      "KnowledgeRevertResponse": {
+        "properties": {
+          "proposal_id": {
+            "title": "Proposal Id",
+            "type": "integer"
+          },
+          "reindexed_files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reindexed Files",
+            "type": "array"
+          },
+          "reverted_path": {
+            "title": "Reverted Path",
+            "type": "string"
+          },
+          "target_path": {
+            "title": "Target Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "target_path",
+          "reverted_path"
+        ],
+        "title": "KnowledgeRevertResponse",
         "type": "object"
       },
       "ProviderSummary": {
@@ -1697,7 +1737,7 @@
     "description": "Expose Synapse indexing, search, discovery, validation, and Cipher operations over JSON/HTTP for PWAs and other web clients.",
     "summary": "HTTP and OpenAPI interface for Synapse retrieval and Cipher reasoning.",
     "title": "Synapse API",
-    "version": "0.3.1"
+    "version": "0.3.2"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2808,6 +2848,95 @@
           }
         },
         "summary": "Post Knowledge Reject",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/knowledge/proposals/{proposal_id}/revert": {
+      "post": {
+        "operationId": "post_knowledge_revert_knowledge_proposals__proposal_id__revert_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "title": "Proposal Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/KnowledgeProposalActionRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeRevertResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Knowledge Revert",
         "tags": [
           "knowledge"
         ]

@@ -166,6 +166,14 @@ class ApplyProposalResult:
     reindexed_files: list[str]
 
 
+@dataclass(frozen=True)
+class RevertProposalResult:
+    proposal_id: int
+    target_path: str
+    reverted_path: str
+    reindexed_files: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -304,10 +312,11 @@ class KnowledgeService:
         snapshots = self._snapshot_files([on_disk, index_path, log_path])
 
         try:
+            previous_markdown = _read_if_exists(on_disk)
             on_disk.parent.mkdir(parents=True, exist_ok=True)
             on_disk.write_text(markdown, encoding="utf-8")
 
-            self._update_index_md(include_proposals=[proposal])
+            self._update_index_md(include_proposals=[{**proposal, "status": "applied"}])
             self._append_log_entry(
                 action="apply",
                 proposal=proposal,
@@ -325,6 +334,8 @@ class KnowledgeService:
                 "action": "apply",
                 "at": _now_iso(),
                 "target_path": target_path,
+                "previous_markdown": previous_markdown,
+                "applied_content_hash": _content_hash(markdown),
             },
         )
 
@@ -367,6 +378,65 @@ class KnowledgeService:
         assert refreshed is not None
         return refreshed
 
+    def revert_proposal(self, proposal_id: int) -> RevertProposalResult:
+        ensure_enabled(self.settings.knowledge)
+        proposal = self.store.get_knowledge_proposal(proposal_id)
+        if not proposal:
+            raise SynapseNotFoundError(f"Proposal not found: {proposal_id}")
+        if proposal["status"] not in {"applied"}:
+            raise SynapseBadRequestError(
+                f"Proposal {proposal_id} is not applied (status={proposal['status']})."
+            )
+
+        target_path = proposal["target_path"]
+        on_disk = self.vault_root / target_path
+        action = proposal.get("reviewer_action") or {}
+        previous_markdown = action.get("previous_markdown")
+        expected_hash = action.get("applied_content_hash")
+        current_hash = _content_hash(on_disk.read_text(encoding="utf-8")) if on_disk.exists() else None
+        if current_hash != expected_hash:
+            raise SynapseConflictError(
+                f"Applied file changed since proposal {proposal_id} was written."
+            )
+
+        index_path = self.vault_root / managed_index_path(self.settings.knowledge.managed_root)
+        log_path = self.vault_root / managed_log_path(self.settings.knowledge.managed_root)
+        snapshots = self._snapshot_files([on_disk, index_path, log_path])
+
+        try:
+            if previous_markdown:
+                on_disk.parent.mkdir(parents=True, exist_ok=True)
+                on_disk.write_text(previous_markdown, encoding="utf-8")
+            elif on_disk.exists():
+                on_disk.unlink()
+                existing_note = self.store.get_note(target_path)
+                if existing_note:
+                    self.store.delete_note(existing_note["id"])
+
+            self._update_index_md(exclude_proposal_ids={proposal_id})
+            self._append_log_entry(action="revert", proposal=proposal)
+            reindexed = self._reindex_managed(target_path)
+        except Exception:
+            self._restore_files(snapshots)
+            raise
+
+        self.store.update_knowledge_proposal_status(
+            proposal_id,
+            status="pending",
+            reviewer_action={
+                "action": "revert",
+                "at": _now_iso(),
+                "target_path": target_path,
+                "reverted_from_hash": current_hash,
+            },
+        )
+        return RevertProposalResult(
+            proposal_id=proposal_id,
+            target_path=target_path,
+            reverted_path=str(on_disk),
+            reindexed_files=reindexed,
+        )
+
     # ---- internal helpers ---------------------------------------------
 
     def _append_log_entry(
@@ -396,15 +466,23 @@ class KnowledgeService:
         with log_path.open("a", encoding="utf-8") as handle:
             handle.write(line + "\n")
 
-    def _update_index_md(self, *, include_proposals: Iterable[dict[str, Any]] = ()) -> None:
+    def _update_index_md(
+        self,
+        *,
+        include_proposals: Iterable[dict[str, Any]] = (),
+        exclude_proposal_ids: set[int] | None = None,
+    ) -> None:
         index_rel = managed_index_path(self.settings.knowledge.managed_root)
         index_path = self.vault_root / index_rel
         index_path.parent.mkdir(parents=True, exist_ok=True)
 
         applied = list(self.store.list_knowledge_proposals(status="applied"))
         by_id = {row["id"]: row for row in applied}
+        for proposal_id in exclude_proposal_ids or set():
+            by_id.pop(proposal_id, None)
         for proposal in include_proposals:
-            by_id[proposal["id"]] = proposal
+            if proposal.get("status") == "applied":
+                by_id[proposal["id"]] = proposal
         applied = list(by_id.values())
         lines = [
             "# Compiled knowledge index",
@@ -490,8 +568,8 @@ def build_indexer_factory(
         return Indexer(
             db=store,
             vault_root=vault_root,
-            note_embedding_client=EmbeddingClient.from_provider(note_cfg),
-            chunk_embedding_client=EmbeddingClient.from_provider(chunk_cfg),
+            note_embedding_client=EmbeddingClient.from_settings(settings, note_cfg.name),
+            chunk_embedding_client=EmbeddingClient.from_settings(settings, chunk_cfg.name),
             min_chunk_chars=settings.index.min_chunk_chars,
             max_chunk_chars=settings.index.max_chunk_chars,
             target_chunk_tokens=settings.index.target_chunk_tokens,

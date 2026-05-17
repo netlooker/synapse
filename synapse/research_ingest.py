@@ -50,6 +50,7 @@ class BundleIngestResult:
     replaced_existing: bool
     source_count: int
     segment_count: int
+    skipped_duplicate_count: int
 
 
 class ResearchBundleIngestor:
@@ -68,7 +69,7 @@ class ResearchBundleIngestor:
         self.max_full_text_chars = max_full_text_chars
         self.target_full_text_tokens = target_full_text_tokens
 
-    def ingest_bundle_file(self, bundle_path: Path) -> BundleIngestResult:
+    def ingest_bundle_file(self, bundle_path: Path, *, replace_existing: bool = False) -> BundleIngestResult:
         bundle_path = bundle_path.expanduser().resolve()
         raw_text = bundle_path.read_text(encoding="utf-8")
         payload = json.loads(raw_text)
@@ -93,10 +94,28 @@ class ResearchBundleIngestor:
 
             source_count = 0
             segment_count = 0
+            skipped_duplicate_count = 0
             for source in prepared.sources:
+                source_hash = _prepared_source_content_hash(source)
+                identity_keys = _prepared_source_identity_keys(source)
+                duplicate = self.db.find_duplicate_source(
+                    identity_keys=identity_keys,
+                    content_hash=source_hash,
+                    exclude_bundle_id=prepared.bundle_id,
+                )
+                if duplicate:
+                    if replace_existing:
+                        self.db.delete_source(duplicate["id"], commit=False)
+                        replaced_existing = True
+                    else:
+                        skipped_duplicate_count += 1
+                        continue
+
                 source_row_id = self.db.insert_source(
                     bundle_row_id,
                     source.source_id,
+                    identity_key=identity_keys[0] if identity_keys else None,
+                    content_hash=source_hash,
                     origin_url=source.origin_url,
                     direct_paper_url=source.direct_paper_url,
                     title=source.title,
@@ -157,6 +176,7 @@ class ResearchBundleIngestor:
             replaced_existing=replaced_existing,
             source_count=source_count,
             segment_count=segment_count,
+            skipped_duplicate_count=skipped_duplicate_count,
         )
 
 
@@ -229,13 +249,21 @@ def normalize_prepared_source(raw_source: dict[str, Any], bundle_path: Path) -> 
         retrieved_at=_first_text(raw_source.get("retrieved_at"), raw_source.get("retrieved")),
         extraction_status=_first_text(raw_source.get("extraction_status"), raw_source.get("status")),
         extraction_method=_first_text(raw_source.get("extraction_method"), raw_source.get("method")),
-        summary_text=_normalize_text_field(raw_source.get("summary")),
-        abstract_text=_normalize_text_field(raw_source.get("abstract")),
-        full_text=full_text,
+        summary_text=_normalize_text_field(raw_source.get("summary"), raw_source.get("summary_text")),
+        abstract_text=_normalize_text_field(raw_source.get("abstract"), raw_source.get("abstract_text")),
+        full_text=full_text
+        or _normalize_text_field(
+            raw_source.get("text"),
+            raw_source.get("content"),
+            raw_source.get("body"),
+            raw_source.get("markdown"),
+        ),
         full_text_path=str(full_text_path) if full_text_path else None,
         note_path=_first_text(raw_source.get("note_path")),
         metadata={
             "json_mirror_path": _first_text(raw_source.get("json_path"), raw_source.get("json_mirror_path")),
+            "document_id": _first_text(raw_source.get("document_id")),
+            "search_score": _normalize_scalar(raw_source.get("search_score")),
         },
         artifact=raw_source,
     )
@@ -267,10 +295,14 @@ def _extract_sources(payload: dict[str, Any], bundle_data: dict[str, Any]) -> li
     for candidate in (
         payload.get("sources"),
         payload.get("prepared_sources"),
+        payload.get("source"),
         bundle_data.get("sources"),
+        bundle_data.get("source"),
     ):
         if isinstance(candidate, list):
             return [item for item in candidate if isinstance(item, dict)]
+        if isinstance(candidate, dict):
+            return [candidate]
     return []
 
 
@@ -305,17 +337,28 @@ def _normalize_authors(value: Any) -> list[str]:
     return [str(value)]
 
 
-def _normalize_text_field(value: Any) -> str | None:
-    if isinstance(value, str):
-        return value.strip() or None
-    if isinstance(value, dict):
-        return _first_text(
-            value.get("text"),
-            value.get("content"),
-            value.get("value"),
-            value.get("summary"),
-            value.get("abstract"),
-        )
+def _normalize_text_field(*values: Any) -> str | None:
+    for value in values:
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped:
+                return stripped
+        if isinstance(value, list):
+            joined = "\n".join(str(item).strip() for item in value if str(item).strip())
+            if joined.strip():
+                return joined.strip()
+        if isinstance(value, dict):
+            candidate = _first_text(
+                value.get("text"),
+                value.get("content"),
+                value.get("value"),
+                value.get("summary"),
+                value.get("abstract"),
+                value.get("body"),
+                value.get("markdown"),
+            )
+            if candidate:
+                return candidate
     return None
 
 
@@ -334,7 +377,44 @@ def _first_text(*values: Any) -> str | None:
             stripped = value.strip()
             if stripped:
                 return stripped
+        if value is not None and isinstance(value, (int, float)):
+            return str(value)
     return None
+
+
+def _normalize_scalar(value: Any) -> str | float | int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, (int, float, str)):
+        return value
+    return str(value)
+
+
+def _prepared_source_identity_keys(source: PreparedSource) -> list[str]:
+    candidates = []
+    for value in (source.origin_url, source.direct_paper_url):
+        if value:
+            candidates.append(value.strip().lower())
+    return list(dict.fromkeys(candidates))
+
+
+def _prepared_source_content_hash(source: PreparedSource) -> str:
+    payload = {
+        "source_id": source.source_id,
+        "origin_url": source.origin_url,
+        "direct_paper_url": source.direct_paper_url,
+        "title": source.title,
+        "authors": source.authors,
+        "published": source.published,
+        "source_type": source.source_type,
+        "summary_text": source.summary_text,
+        "abstract_text": source.abstract_text,
+        "full_text": source.full_text,
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _segment_text(text: str, *, max_chars: int, target_tokens: int) -> list[str]:
@@ -389,6 +469,11 @@ def main() -> None:
         default=None,
         help="Embedding provider name to use for source segments",
     )
+    parser.add_argument(
+        "--replace-existing",
+        action="store_true",
+        help="Replace already-ingested duplicate sources instead of skipping them",
+    )
     args = parser.parse_args()
 
     settings = load_settings(args.config)
@@ -399,9 +484,12 @@ def main() -> None:
     try:
         ingestor = ResearchBundleIngestor(
             db=store,
-            embedding_client=EmbeddingClient.from_provider(provider),
+            embedding_client=EmbeddingClient.from_settings(settings, provider.name),
         )
-        result = ingestor.ingest_bundle_file(Path(args.bundle))
+        result = ingestor.ingest_bundle_file(
+            Path(args.bundle),
+            replace_existing=args.replace_existing,
+        )
     finally:
         store.close()
 
@@ -409,6 +497,7 @@ def main() -> None:
     print(f"   Path: {result.bundle_path}")
     print(f"   Sources: {result.source_count}")
     print(f"   Segments: {result.segment_count}")
+    print(f"   Skipped Duplicates: {result.skipped_duplicate_count}")
     print(f"   Replaced Existing: {'yes' if result.replaced_existing else 'no'}")
 
 

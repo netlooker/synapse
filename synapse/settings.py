@@ -131,6 +131,12 @@ class AppSettings:
     def contextual_embedding_provider(self) -> ProviderSettings:
         return self.embedding_provider(self.index.contextual_provider)
 
+    def fallback_embedding_provider(self) -> ProviderSettings | None:
+        provider = self.embedding_providers.get("fallback")
+        if provider:
+            return provider
+        return None
+
 
 def load_settings(config_path: str | Path | None = None) -> AppSettings:
     """Load settings from TOML with environment-based overrides."""

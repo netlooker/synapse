@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .base import BaseEmbeddingAdapter
 from .infinity import InfinityEmbeddingAdapter
+from .local_hash import LocalHashEmbeddingAdapter
 from .ollama import OllamaEmbeddingAdapter
 from .openai_compatible import OpenAICompatibleEmbeddingAdapter
 
@@ -22,6 +23,7 @@ def create_embedding_adapter(
         "ollama": OllamaEmbeddingAdapter,
         "infinity": InfinityEmbeddingAdapter,
         "openai_compatible": OpenAICompatibleEmbeddingAdapter,
+        "local_hash": LocalHashEmbeddingAdapter,
     }
     adapter_cls = adapter_map.get(provider_type, OpenAICompatibleEmbeddingAdapter)
     return adapter_cls(

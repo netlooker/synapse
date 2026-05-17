@@ -73,6 +73,7 @@ from .service_api import (
     KnowledgeProposalActionRequest,
     KnowledgeProposalListRequest,
     KnowledgeProposalListResponse,
+    KnowledgeRevertResponse,
     KnowledgeRejectResponse,
     KnowledgeSourceDetailRequest,
     SearchRequest,
@@ -89,6 +90,7 @@ from .service_api import (
     knowledge_source_detail,
     list_knowledge_proposals,
     reject_knowledge_proposal,
+    revert_knowledge_proposal,
     runtime_requirements,
     search_index,
     validate_index,
@@ -331,6 +333,27 @@ def create_app(cipher_service: CipherService | None = None):
     ) -> KnowledgeRejectResponse:
         try:
             return reject_knowledge_proposal(
+                proposal_id,
+                request or KnowledgeProposalActionRequest(),
+            )
+        except Exception as exc:  # pragma: no cover
+            raise map_error(exc) from exc
+
+    @app.post(
+        "/knowledge/proposals/{proposal_id}/revert",
+        response_model=KnowledgeRevertResponse,
+        tags=["knowledge"],
+        responses={
+            400: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+        },
+    )
+    def post_knowledge_revert(
+        proposal_id: int, request: KnowledgeProposalActionRequest | None = None
+    ) -> KnowledgeRevertResponse:
+        try:
+            return revert_knowledge_proposal(
                 proposal_id,
                 request or KnowledgeProposalActionRequest(),
             )

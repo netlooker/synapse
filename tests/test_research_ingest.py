@@ -79,6 +79,7 @@ def test_ingest_bundle_persists_bundle_sources_and_segments(tmp_path):
         assert result.bundle_id == "bundle-001"
         assert result.source_count == 1
         assert result.segment_count >= 3
+        assert result.skipped_duplicate_count == 0
         assert bundle is not None
         assert source is not None
         assert source["title"] == "Prepared Source"
@@ -96,6 +97,30 @@ def test_ingest_bundle_persists_bundle_sources_and_segments(tmp_path):
         vec_rows = db.conn.execute("SELECT COUNT(*) FROM vec_segments").fetchone()[0]
         assert fts_rows == len(segments)
         assert vec_rows == len(segments)
+    finally:
+        db.close()
+
+
+def test_ingest_bundle_accepts_minimal_text_only_source(tmp_path):
+    db = Database(tmp_path / "synapse.sqlite", embedding_dim=4)
+    db.initialize()
+    try:
+        bundle_path = tmp_path / "prepared_source_bundle.json"
+        bundle_path.write_text(json.dumps({
+            "bundle_id": 123,
+            "source": {
+                "source_id": 456,
+                "text": ["Paragraph one.", "Paragraph two."],
+            },
+        }), encoding="utf-8")
+
+        result = ResearchBundleIngestor(db=db, embedding_client=FakeEmbedder()).ingest_bundle_file(bundle_path)
+
+        source = db.get_source("123", "456")
+        assert result.bundle_id == "123"
+        assert result.source_count == 1
+        assert source is not None
+        assert source["full_text"] == "Paragraph one.\nParagraph two."
     finally:
         db.close()
 
@@ -144,6 +169,7 @@ def test_reingest_replaces_existing_bundle_rows(tmp_path):
 
         assert first.replaced_existing is False
         assert second.replaced_existing is True
+        assert second.skipped_duplicate_count == 0
         assert bundle_count == 1
         assert source_count == 1
         assert segment_count == 1
@@ -151,5 +177,92 @@ def test_reingest_replaces_existing_bundle_rows(tmp_path):
         assert source is not None
         assert source["title"] == "Updated Title"
         assert source["summary_text"] == "Updated summary."
+    finally:
+        db.close()
+
+
+def test_ingest_bundle_skips_duplicate_sources_across_bundles(tmp_path):
+    db = Database(tmp_path / "synapse.sqlite", embedding_dim=4)
+    db.initialize()
+    try:
+        first_bundle = tmp_path / "bundle_one.json"
+        first_bundle.write_text(json.dumps({
+            "bundle_id": "bundle-003",
+            "sources": [
+                {
+                    "source_id": "source-01",
+                    "origin_url": "https://example.com/shared",
+                    "title": "Shared Title",
+                    "summary": "Shared summary.",
+                }
+            ],
+        }), encoding="utf-8")
+        second_bundle = tmp_path / "bundle_two.json"
+        second_bundle.write_text(json.dumps({
+            "bundle_id": "bundle-004",
+            "sources": [
+                {
+                    "source_id": "source-99",
+                    "origin_url": "https://example.com/shared",
+                    "title": "Shared Title",
+                    "summary": "Shared summary.",
+                }
+            ],
+        }), encoding="utf-8")
+
+        ingestor = ResearchBundleIngestor(db=db, embedding_client=FakeEmbedder())
+        first = ingestor.ingest_bundle_file(first_bundle)
+        second = ingestor.ingest_bundle_file(second_bundle)
+
+        source_total = db.conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+        assert first.source_count == 1
+        assert second.source_count == 0
+        assert second.skipped_duplicate_count == 1
+        assert source_total == 1
+    finally:
+        db.close()
+
+
+def test_ingest_bundle_replace_existing_overwrites_duplicate_source(tmp_path):
+    db = Database(tmp_path / "synapse.sqlite", embedding_dim=4)
+    db.initialize()
+    try:
+        first_bundle = tmp_path / "bundle_one.json"
+        first_bundle.write_text(json.dumps({
+            "bundle_id": "bundle-005",
+            "sources": [
+                {
+                    "source_id": "source-01",
+                    "origin_url": "https://example.com/shared",
+                    "title": "Old Title",
+                    "summary": "Old summary.",
+                }
+            ],
+        }), encoding="utf-8")
+        second_bundle = tmp_path / "bundle_two.json"
+        second_bundle.write_text(json.dumps({
+            "bundle_id": "bundle-006",
+            "sources": [
+                {
+                    "source_id": "source-02",
+                    "origin_url": "https://example.com/shared",
+                    "title": "New Title",
+                    "summary": "New summary.",
+                }
+            ],
+        }), encoding="utf-8")
+
+        ingestor = ResearchBundleIngestor(db=db, embedding_client=FakeEmbedder())
+        ingestor.ingest_bundle_file(first_bundle)
+        result = ingestor.ingest_bundle_file(second_bundle, replace_existing=True)
+
+        source_total = db.conn.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
+        replaced = db.get_source("bundle-006", "source-02")
+        assert result.replaced_existing is True
+        assert result.source_count == 1
+        assert result.skipped_duplicate_count == 0
+        assert source_total == 1
+        assert replaced is not None
+        assert replaced["title"] == "New Title"
     finally:
         db.close()
