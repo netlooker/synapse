@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -1012,6 +1013,48 @@ def _write_live_knowledge_config(tmp_path: Path) -> tuple[Path, Path, Path, Path
     return vault, db_path, bundle_path, config_path
 
 
+def _create_legacy_db_missing_source_dedupe_columns(db_path: Path) -> None:
+    """Create the v0.3.2 upgrade shape that lacked source dedupe columns."""
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        """
+        CREATE TABLE bundles (
+            id INTEGER PRIMARY KEY,
+            bundle_id TEXT UNIQUE NOT NULL,
+            artifact_path TEXT,
+            content_hash TEXT NOT NULL,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            artifact_json TEXT NOT NULL DEFAULT '{}',
+            imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE sources (
+            id INTEGER PRIMARY KEY,
+            bundle_row_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+            source_id TEXT NOT NULL,
+            origin_url TEXT,
+            direct_paper_url TEXT,
+            title TEXT,
+            authors_json TEXT NOT NULL DEFAULT '[]',
+            published TEXT,
+            source_type TEXT,
+            retrieved_at TEXT,
+            extraction_status TEXT,
+            extraction_method TEXT,
+            summary_text TEXT,
+            abstract_text TEXT,
+            full_text TEXT,
+            full_text_path TEXT,
+            note_path TEXT,
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            artifact_json TEXT NOT NULL DEFAULT '{}',
+            imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(bundle_row_id, source_id)
+        );
+        """
+    )
+    conn.close()
+
+
 def test_knowledge_tools_run_end_to_end_against_live_sqlite(tmp_path, monkeypatch):
     """Ingest → compile → apply → list roundtrip through the MCP tool layer."""
     vault, db_path, bundle_path, config_path = _write_live_knowledge_config(tmp_path)
@@ -1094,6 +1137,51 @@ def test_knowledge_tools_run_end_to_end_against_live_sqlite(tmp_path, monkeypatc
     log_path = vault / "_knowledge" / "log.md"
     assert "source-attention.md" in index_path.read_text(encoding="utf-8")
     assert "apply :: proposal #" in log_path.read_text(encoding="utf-8")
+
+
+def test_knowledge_tools_migrate_legacy_db_before_ingest_overview_and_compile(tmp_path, monkeypatch):
+    """Older DBs missing source dedupe columns should need no manual ALTER TABLE."""
+    _, db_path, bundle_path, config_path = _write_live_knowledge_config(tmp_path)
+    _create_legacy_db_missing_source_dedupe_columns(db_path)
+
+    fake_embedder = _MCPFakeEmbedder()
+    monkeypatch.setattr(
+        "synapse.service_api.EmbeddingClient.from_provider",
+        lambda provider: fake_embedder,
+    )
+    monkeypatch.setattr(
+        "synapse.knowledge_service.EmbeddingClient.from_provider",
+        lambda provider: fake_embedder,
+    )
+
+    server = build_server()
+
+    async def exercise() -> None:
+        ingest_result = await server._tool_manager._tools["synapse_ingest_bundle"].run(
+            {
+                "bundle_path": str(bundle_path),
+                "config_path": str(config_path),
+                "db_path": str(db_path),
+            }
+        )
+        assert ingest_result["source_count"] == 1
+
+        overview = await server._tool_manager._tools["synapse_knowledge_overview"].run(
+            {"config_path": str(config_path)}
+        )
+        assert overview["managed_root"] == "_knowledge"
+
+        compile_result = await server._tool_manager._tools["synapse_knowledge_compile_bundle"].run(
+            {"bundle_id": "bundle-001", "config_path": str(config_path)}
+        )
+        assert compile_result["created_count"] == 1
+
+    anyio.run(exercise)
+
+    conn = sqlite3.connect(db_path)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(sources)").fetchall()}
+    conn.close()
+    assert {"identity_key", "content_hash"}.issubset(columns)
 
 
 def test_knowledge_reject_proposal_runs_end_to_end_against_live_sqlite(tmp_path, monkeypatch):

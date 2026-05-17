@@ -67,6 +67,7 @@ This skill documents the current MCP surface shipped by the `synapse` repo itsel
 - `evidence`: return narrow evidence matches
 
 Prefer `research` unless the task specifically wants note-only or evidence-only output.
+Pass plain user text directly as `query`, including multi-word phrases such as `note taking`; Synapse normalizes it for lexical search internally.
 
 ## Knowledge workflow
 
@@ -81,6 +82,7 @@ Guardrails:
 - do not hand-edit the managed root
 - use `synapse_knowledge_revert_proposal` to undo an applied note while preserving audit history
 - rejected proposals stay visible as audit records
+- do not run manual SQL migrations before knowledge tools; opening the store through Synapse should apply supported DB schema migrations automatically
 
 ## Bundle ingest guidance
 

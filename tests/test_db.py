@@ -1,5 +1,6 @@
 """Tests for Synapse's source-first database layer."""
 
+import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -51,6 +52,81 @@ class TestDatabaseSetup:
             version = db.vec_version()
             assert version is not None
             assert "v" in version
+            db.close()
+
+    def test_initialize_migrates_existing_sources_before_dependent_indexes(self):
+        from synapse.db import Database
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.sqlite"
+            conn = sqlite3.connect(db_path)
+            conn.executescript(
+                """
+                CREATE TABLE bundles (
+                    id INTEGER PRIMARY KEY,
+                    bundle_id TEXT UNIQUE NOT NULL,
+                    artifact_path TEXT,
+                    content_hash TEXT NOT NULL,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    artifact_json TEXT NOT NULL DEFAULT '{}',
+                    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE sources (
+                    id INTEGER PRIMARY KEY,
+                    bundle_row_id INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+                    source_id TEXT NOT NULL,
+                    origin_url TEXT,
+                    direct_paper_url TEXT,
+                    title TEXT,
+                    authors_json TEXT NOT NULL DEFAULT '[]',
+                    published TEXT,
+                    source_type TEXT,
+                    retrieved_at TEXT,
+                    extraction_status TEXT,
+                    extraction_method TEXT,
+                    summary_text TEXT,
+                    abstract_text TEXT,
+                    full_text TEXT,
+                    full_text_path TEXT,
+                    note_path TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    artifact_json TEXT NOT NULL DEFAULT '{}',
+                    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(bundle_row_id, source_id)
+                );
+                """
+            )
+            conn.close()
+
+            db = Database(db_path, embedding_dim=4)
+            db.initialize()
+
+            columns = {
+                row["name"]
+                for row in db.conn.execute("PRAGMA table_info(sources)").fetchall()
+            }
+            indexes = {
+                row["name"]
+                for row in db.conn.execute("PRAGMA index_list(sources)").fetchall()
+            }
+            bundle_row_id = db.upsert_bundle("bundle-1", "bundle-hash", commit=False)
+            source_row_id = db.insert_source(
+                bundle_row_id,
+                "source-1",
+                identity_key="url:https://example.com/source",
+                content_hash="source-hash",
+                title="Migrated Source",
+                commit=False,
+            )
+            db.conn.commit()
+            source = db.get_source("bundle-1", "source-1")
+
+            assert {"identity_key", "content_hash"}.issubset(columns)
+            assert "idx_sources_identity_key" in indexes
+            assert "idx_sources_content_hash" in indexes
+            assert source_row_id > 0
+            assert source["identity_key"] == "url:https://example.com/source"
+            assert source["content_hash"] == "source-hash"
             db.close()
 
 
@@ -154,6 +230,46 @@ class TestSourceCorpusOperations:
             assert lexical[0]["title"] == "Weak Signals"
             assert len(vector) == 1
             assert vector[0]["vector_score"] is not None
+            db.close()
+
+    def test_lexical_search_escapes_plain_multi_word_note_queries(self):
+        from synapse.db import Database
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = Database(Path(tmpdir) / "test.sqlite", embedding_dim=4)
+            db.initialize()
+
+            note_id = db.insert_note(
+                note_path="notes/note-taking.md",
+                title="Note Taking",
+                body_text="Plain note taking workflows should be searchable.",
+                commit=False,
+            )
+            db.insert_segment(
+                owner_kind="note",
+                owner_id=note_id,
+                note_row_id=note_id,
+                content_role="note_body",
+                segment_index=0,
+                text="Plain note taking workflows should be searchable.",
+                embedding=[0.1, 0.1, 0.1, 0.1],
+                commit=False,
+            )
+            db.conn.commit()
+
+            spaced = db.search_segments_lexical(
+                "note taking",
+                limit=5,
+                filters={"owner_kind": "note"},
+            )
+            punctuated = db.search_segments_lexical(
+                "note-taking: workflows?",
+                limit=5,
+                filters={"owner_kind": "note"},
+            )
+
+            assert [row["note_path"] for row in spaced] == ["notes/note-taking.md"]
+            assert [row["note_path"] for row in punctuated] == ["notes/note-taking.md"]
             db.close()
 
     def test_delete_note_removes_segments(self):

@@ -1,5 +1,6 @@
 """Database operations for Synapse's source-first research corpus."""
 import json
+import re
 import sqlite3
 import struct
 from contextlib import suppress
@@ -180,6 +181,8 @@ class Database:
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        self._ensure_schema_migrations()
+
         cur.execute("""
             CREATE INDEX IF NOT EXISTS idx_knowledge_proposals_status
             ON knowledge_proposals(status)
@@ -213,7 +216,6 @@ class Database:
         """)
         
         self.conn.commit()
-        self._ensure_schema_migrations()
 
     def close(self) -> None:
         """Close database connection."""
@@ -682,8 +684,12 @@ class Database:
     ) -> list[dict[str, Any]]:
         """Search indexed source-first segments with FTS5/BM25."""
         cur = self.conn.cursor()
+        fts_query = _fts5_query_from_user_text(query)
+        if not fts_query:
+            return []
+
         where_clauses = ["segments_fts MATCH ?"]
-        params: list[Any] = [query]
+        params: list[Any] = [fts_query]
         filter_sql, filter_params = _segment_filter_sql(filters)
         where_clauses.extend(filter_sql)
         params.extend(filter_params)
@@ -1022,6 +1028,12 @@ def _estimate_tokens(text: str) -> int:
     if not cleaned:
         return 0
     return max(1, round(len(cleaned) / 4))
+
+
+def _fts5_query_from_user_text(query: str) -> str:
+    """Convert plain user text into safe FTS5 term syntax."""
+    terms = re.findall(r"[\w]+", query, flags=re.UNICODE)
+    return " AND ".join(f'"{term}"' for term in terms)
 
 
 def _segment_filter_sql(filters: dict[str, Any] | None) -> tuple[list[str], list[Any]]:

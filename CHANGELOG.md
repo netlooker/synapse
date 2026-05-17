@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-05-17
+
+### Fixed
+- Existing SQLite databases now apply the `sources.identity_key` and
+  `sources.content_hash` schema migrations before dependent indexes are created,
+  so knowledge-tool and bundle-ingest flows open upgraded databases without
+  requiring manual `ALTER TABLE` intervention.
+- Plain multi-word and punctuated lexical queries are now normalized before
+  hitting SQLite FTS, avoiding note-mode parsing failures for inputs such as
+  `note taking`.
+
+### Added
+- Regression coverage for legacy database upgrade paths through direct DB setup
+  and MCP knowledge-tool flows, plus lexical search coverage for multi-word and
+  punctuated note queries.
+
+### Changed
+- The bundled Synapse skill now states that supported DB migrations should run
+  automatically and that callers should pass plain user search text directly.
+
 ## [0.3.2] - 2026-05-17
 
 ### Added
