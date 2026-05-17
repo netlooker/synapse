@@ -64,6 +64,19 @@ uv run synapse-search \
 
 Available search modes are `source`, `note`, `evidence`, and `research`. `research` is the default mixed retrieval surface.
 
+Use unscoped search for whole-vault discovery. Use `bundle_id` filtering for corpus evaluations, source-pack QA, and questions that must stay inside a specific ingested bundle:
+
+```bash
+uv run synapse-search \
+  --config /config/synapse.toml \
+  --db /data/workspace/vault/.synapse.sqlite \
+  --bundle-id km-final-selected \
+  --mode source \
+  "external cognition"
+```
+
+For MCP and HTTP callers, pass the same scope as a top-level `bundle_id` search parameter.
+
 ## 6. Explore hidden relationships
 
 ```bash

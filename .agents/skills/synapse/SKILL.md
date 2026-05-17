@@ -19,12 +19,12 @@ This skill documents the current MCP surface shipped by the `synapse` repo itsel
 |------|---------|------------|
 | `synapse_health` | Check runtime readiness, DB status, provider config | optional overrides |
 | `synapse_index` | Index a markdown folder into the vector store | `vault_root`, `db_path` |
-| `synapse_search` | Semantic search across indexed content | `query`, `mode`, `limit` |
+| `synapse_search` | Semantic search across indexed content | `query`, `mode`, `limit`, optional `bundle_id` |
 | `synapse_discover` | Find unlinked but semantically related documents | `threshold`, `max_total` |
-| `synapse_validate` | Report broken `[[wikilinks]]` in indexed vault | optional overrides |
+| `synapse_validate` | Report broken `[[wikilinks]]` and vector integrity in indexed vault | optional overrides |
 | `synapse_health_for_workspace` | Check readiness for the configured active workspace | `workspace` |
 | `synapse_index_for_workspace` | Index the configured active workspace | `workspace` |
-| `synapse_search_for_workspace` | Search the configured active workspace | `workspace`, `query`, `mode`, `limit` |
+| `synapse_search_for_workspace` | Search the configured active workspace | `workspace`, `query`, `mode`, `limit`, optional `bundle_id` |
 
 ### Strict-shape local-model facade
 
@@ -32,7 +32,7 @@ This skill documents the current MCP surface shipped by the `synapse` repo itsel
 |------|---------|-----------------|
 | `synapse_health_simple` | Minimal health probe | `vault_root`, `db_path` |
 | `synapse_index_simple` | Minimal index call | `vault_root`, `db_path` |
-| `synapse_search_simple` | Minimal search call | `query`, `db_path` |
+| `synapse_search_simple` | Minimal search call | `query`, `db_path`, optional `bundle_id` |
 
 ### Reasoning via Cipher
 
@@ -69,6 +69,34 @@ This skill documents the current MCP surface shipped by the `synapse` repo itsel
 Prefer `research` unless the task specifically wants note-only or evidence-only output.
 Pass plain user text directly as `query`, including multi-word phrases such as `note taking`; Synapse normalizes it for lexical search internally.
 
+## Corpus-scoped retrieval
+
+Use unscoped search for whole-vault discovery and open-ended retrieval.
+
+Use `bundle_id` filtering for corpus evaluations, source-pack QA, and questions that must be answered from a specific ingested bundle. Without a bundle scope, older unrelated bundles can compete with the target corpus.
+
+CLI example:
+
+```bash
+synapse-python -m synapse.search \
+  --config /config/synapse.toml \
+  --db /data/workspace/vault/.synapse.sqlite \
+  --bundle-id km-final-selected \
+  --mode source \
+  "external cognition"
+```
+
+MCP shape:
+
+```json
+{
+  "query": "external cognition",
+  "mode": "source",
+  "db_path": "/data/workspace/vault/.synapse.sqlite",
+  "bundle_id": "km-final-selected"
+}
+```
+
 ## Knowledge workflow
 
 1. Ingest a prepared bundle with `synapse_ingest_bundle`.
@@ -99,3 +127,23 @@ Guardrails:
 - if remote providers fail, it falls back to a local in-process embedding adapter
 
 This keeps indexing and search available during provider outages, though retrieval quality may differ from the primary model.
+
+## Vector integrity checks
+
+`synapse_validate` returns a `vector_integrity` section with segment/vector counts, orphan and missing vector counts, `shadow_rowids_id_null_count`, the linkage key, and a status.
+
+`vec_segments_rowids` is an sqlite-vec internal shadow table. Synapse links segments through `segments.id` and `vec_segments.segment_id`; `vec_segments_rowids.rowid` mirrors the relevant row identity. NULL values in `vec_segments_rowids.id` alone are informational when orphan and missing counts are zero.
+
+Until runtime diagnostics are available in older deployments, use these SQL checks:
+
+```sql
+SELECT COUNT(*) AS orphan_vectors
+FROM vec_segments_rowids vr
+LEFT JOIN segments s ON s.id = vr.rowid
+WHERE s.id IS NULL;
+
+SELECT COUNT(*) AS missing_vectors
+FROM segments s
+LEFT JOIN vec_segments_rowids vr ON vr.rowid = s.id
+WHERE vr.rowid IS NULL;
+```

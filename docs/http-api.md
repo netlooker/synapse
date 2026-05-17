@@ -176,6 +176,7 @@ curl -X POST "http://127.0.0.1:8765/index" \
 ### Search
 
 Accepted search modes are `source`, `note`, `evidence`, and `research`.
+Use unscoped search for whole-index discovery. For corpus evaluations, source-pack QA, or questions that must stay inside one ingested bundle, pass `bundle_id`.
 
 ```bash
 curl -X POST "http://127.0.0.1:8765/search" \
@@ -185,6 +186,7 @@ curl -X POST "http://127.0.0.1:8765/search" \
     "config_path": "config/synapse.toml",
     "db_path": "/path/to/synapse.sqlite",
     "mode": "research",
+    "bundle_id": "km-final-selected",
     "limit": 5
   }'
 ```

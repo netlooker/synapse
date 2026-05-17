@@ -23,7 +23,7 @@ from .research_ingest import ResearchBundleIngestor
 from .index import Indexer
 from .search import Searcher
 from .settings import AppSettings, ProviderSettings, load_settings
-from .validate import BrokenLink, find_broken_links
+from .validate import BrokenLink, VectorIntegrity, find_broken_links, inspect_vector_integrity
 from .vector_store import create_vector_store
 
 
@@ -202,9 +202,20 @@ class BrokenLinkResult(BaseModel):
     target_link: str
 
 
+class VectorIntegrityResult(BaseModel):
+    segment_count: int
+    vector_count: int
+    orphan_vector_count: int
+    missing_vector_count: int
+    shadow_rowids_id_null_count: int
+    linkage_key: str
+    status: Literal["ok", "warning", "error"]
+
+
 class ValidateResponse(BaseModel):
     database_path: str
     broken_links: list[BrokenLinkResult] = Field(default_factory=list)
+    vector_integrity: VectorIntegrityResult | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -562,12 +573,14 @@ def validate_index(request: ValidateRequest) -> ValidateResponse:
     store.initialize()
     try:
         broken_links = find_broken_links(store)
+        vector_integrity = inspect_vector_integrity(store)
     finally:
         store.close()
 
     return ValidateResponse(
         database_path=str(db),
         broken_links=[_broken_link_result(item) for item in broken_links],
+        vector_integrity=_vector_integrity_result(vector_integrity),
     )
 
 
@@ -938,4 +951,16 @@ def _broken_link_result(item: BrokenLink) -> BrokenLinkResult:
     return BrokenLinkResult(
         source_path=item.source_path,
         target_link=item.target_link,
+    )
+
+
+def _vector_integrity_result(item: VectorIntegrity) -> VectorIntegrityResult:
+    return VectorIntegrityResult(
+        segment_count=item.segment_count,
+        vector_count=item.vector_count,
+        orphan_vector_count=item.orphan_vector_count,
+        missing_vector_count=item.missing_vector_count,
+        shadow_rowids_id_null_count=item.shadow_rowids_id_null_count,
+        linkage_key=item.linkage_key,
+        status=item.status,
     )

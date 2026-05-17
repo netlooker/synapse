@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-05-17
+
+### Added
+- Validation now reports sqlite-vec vector integrity counts, including segment
+  and vector totals, orphan vectors, missing vectors, shadow-rowid NULL counts,
+  linkage key, and an `ok` / `warning` / `error` status.
+- MCP search tools now expose top-level `bundle_id` filtering for corpus-scoped
+  retrieval, matching the existing CLI and service-layer search filters.
+
+### Changed
+- The bundled Synapse skill and user-facing docs now explain when to use
+  unscoped retrieval versus `bundle_id`-scoped retrieval for corpus evaluation
+  and source-pack QA.
+- Operator docs now clarify sqlite-vec shadow-table semantics so NULL
+  `vec_segments_rowids.id` values are treated as informational when `rowid`
+  linkage is intact.
+- The tracked OpenAPI export now includes the vector integrity validation
+  response schema.
+
 ## [0.3.3] - 2026-05-17
 
 ### Fixed
@@ -156,7 +175,10 @@ written, so existing deployments are unaffected.
 - All markdown bodies are rendered deterministically from already-indexed source
   fields; there is no model/Cipher dependency on the core compile/apply path.
 
-[Unreleased]: https://github.com/netlooker/synapse/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/netlooker/synapse/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/netlooker/synapse/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/netlooker/synapse/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/netlooker/synapse/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/netlooker/synapse/releases/tag/v0.3.1
 [0.3.0]: https://github.com/netlooker/synapse/releases/tag/v0.3.0
 [0.2.0]: https://github.com/netlooker/synapse/releases/tag/v0.2.0

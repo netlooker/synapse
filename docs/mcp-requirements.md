@@ -215,7 +215,19 @@ When raw path fields are fragile in the agent runtime, `synapse_index_for_worksp
 
 - work against an existing Synapse SQLite index
 - support `source`, `note`, `evidence`, and `research`
+- support top-level `bundle_id` filtering for corpus-scoped retrieval, plus optional `source_id` and `source_type`
 - return structured ranked results
+
+Use unscoped search for whole-vault discovery. Use `bundle_id` for corpus evaluations, source-pack QA, and questions that must be answered from a specific ingested bundle:
+
+```json
+{
+  "query": "external cognition",
+  "mode": "source",
+  "db_path": "/data/workspace/vault/.synapse.sqlite",
+  "bundle_id": "km-final-selected"
+}
+```
 
 For local-model runtimes, `synapse_search_simple(query, db_path, mode="research")` is the preferred search wrapper.
 
@@ -233,6 +245,8 @@ When raw path fields are fragile in the agent runtime, `synapse_search_for_works
 `synapse_validate` should:
 
 - report broken wikilinks from the indexed corpus
+- report vector integrity counts including `segment_count`, `vector_count`, orphan vectors, missing vectors, `shadow_rowids_id_null_count`, linkage key, and status
+- treat NULL `vec_segments_rowids.id` values as informational when `vec_segments_rowids.rowid` linkage to `segments.id` is intact
 - avoid any automatic writes
 
 ## Reasoning Boundary

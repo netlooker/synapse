@@ -322,6 +322,19 @@ uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite 
 uv run synapse-search --config config/synapse.toml --db ~/notes/.synapse.sqlite --mode research "weak signals across notes"
 ```
 
+Use unscoped search for whole-vault discovery. For corpus evaluations, source-pack QA, or questions that must be answered from one ingested bundle, add `--bundle-id`:
+
+```bash
+uv run synapse-search \
+  --config /config/synapse.toml \
+  --db /data/workspace/vault/.synapse.sqlite \
+  --bundle-id km-final-selected \
+  --mode source \
+  "external cognition"
+```
+
+The same filter is available through MCP and HTTP search as top-level `bundle_id`.
+
 ### Discover hidden relationships
 
 ```bash
@@ -333,6 +346,8 @@ uv run synapse-discover --config config/synapse.toml --db ~/notes/.synapse.sqlit
 ```bash
 uv run synapse-validate --config config/synapse.toml --db ~/notes/.synapse.sqlite
 ```
+
+Validation reports broken wikilinks and sqlite-vec vector linkage counts. `vec_segments_rowids` is an sqlite-vec shadow table; Synapse linkage uses `segments.id`, `vec_segments.segment_id`, and `vec_segments_rowids.rowid`. NULL values in the shadow table's `id` column are informational when orphan and missing vector counts are zero.
 
 ### Grow missing stubs
 

@@ -131,6 +131,8 @@ def test_search_tool_schema_includes_valid_and_invalid_examples():
 
     assert "valid arguments" in description.lower()
     assert "invalid arguments" in description.lower()
+    assert "bundle_id" in description
+    assert "bundle_id" in params
     assert "top-level string field" in description.lower()
     assert "top-level field" in params["query"]["description"].lower()
 
@@ -337,6 +339,37 @@ def test_search_tool_normalizes_collapsed_db_path_blob(monkeypatch, tmp_path):
         assert result["query"] == "cross-paper insights about AI and computer science"
         assert result["mode"] == "research"
         assert result["database_path"] == str(db)
+
+    anyio.run(exercise)
+
+
+def test_search_tool_passes_bundle_filter(monkeypatch, tmp_path):
+    server = build_server()
+    db = tmp_path / "synapse.sqlite"
+    captured = {}
+
+    def fake_search_index(request):
+        captured["bundle_id"] = request.bundle_id
+        return SearchResponse(
+            query=request.query,
+            mode=request.mode,
+            database_path=request.db_path or "",
+            results=[],
+        )
+
+    monkeypatch.setattr("synapse.mcp_server.search_index", fake_search_index)
+
+    async def exercise() -> None:
+        await server._tool_manager._tools["synapse_search"].run(
+            {
+                "query": "external cognition",
+                "db_path": str(db),
+                "mode": "source",
+                "bundle_id": "km-final-selected",
+            }
+        )
+
+        assert captured["bundle_id"] == "km-final-selected"
 
     anyio.run(exercise)
 

@@ -92,8 +92,9 @@ INDEX_SIMPLE_TOOL_DESCRIPTION = (
 SEARCH_TOOL_DESCRIPTION = (
     "Search an indexed Synapse database. "
     "query must be a top-level string field. mode must be a top-level string field. "
+    "Use bundle_id to scope retrieval to a specific ingested research bundle. "
     "db_path must be a plain string path. Do not encode multiple parameters inside db_path. "
-    'Valid arguments: {"query": "cross-paper insights", "mode": "research", "db_path": "/abs/synapse.sqlite"}. '
+    'Valid arguments: {"query": "cross-paper insights", "mode": "research", "db_path": "/abs/synapse.sqlite", "bundle_id": "km-final-selected"}. '
     'Invalid arguments: {"db_path": "{\\"/abs/synapse.sqlite\\"},mode:\\"research\\",query:\\"cross-paper insights\\"}"}.'
 )
 SEARCH_SIMPLE_TOOL_DESCRIPTION = (
@@ -114,7 +115,8 @@ WORKSPACE_INDEX_TOOL_DESCRIPTION = (
 )
 WORKSPACE_SEARCH_TOOL_DESCRIPTION = (
     "Pathless search call for local-model agents. "
-    "Provide query and optional mode. Use workspace='current' or omit it to search the configured Synapse database."
+    "Provide query and optional mode. Use bundle_id for corpus-scoped retrieval. "
+    "Use workspace='current' or omit it to search the configured Synapse database."
 )
 _COLLAPSED_ARG_KEYS = ("config_path", "vault_root", "db_path", "query", "mode")
 _COLLAPSED_ARG_PATTERN = re.compile(
@@ -292,6 +294,15 @@ RequiredPlainPathArg = Annotated[
     Field(description=PLAIN_PATH_DESCRIPTION),
 ]
 QueryArg = Annotated[str, Field(description=PLAIN_QUERY_DESCRIPTION)]
+OptionalSearchFilterArg = Annotated[
+    str | None,
+    Field(
+        description=(
+            "Optional top-level search filter. Use bundle_id to constrain corpus-specific "
+            "evaluation to one ingested bundle."
+        )
+    ),
+]
 SearchModeArg = Annotated[
     Literal["source", "note", "evidence", "research"],
     BeforeValidator(_coerce_mode_arg),
@@ -472,6 +483,9 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         provider: str | None = None,
         mode: SearchModeArg = "research",
         limit: int | None = None,
+        bundle_id: OptionalSearchFilterArg = None,
+        source_id: OptionalSearchFilterArg = None,
+        source_type: OptionalSearchFilterArg = None,
     ) -> dict[str, Any]:
         return search_index(
             SearchRequest(
@@ -481,6 +495,9 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
                 provider=provider,
                 mode=mode,
                 limit=limit,
+                bundle_id=bundle_id,
+                source_id=source_id,
+                source_type=source_type,
             )
         ).model_dump()
 
@@ -492,12 +509,14 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         query: QueryArg,
         db_path: RequiredPlainPathArg,
         mode: SearchModeArg = "research",
+        bundle_id: OptionalSearchFilterArg = None,
     ) -> dict[str, Any]:
         return search_index(
             SearchRequest(
                 query=query,
                 db_path=db_path,
                 mode=mode,
+                bundle_id=bundle_id,
             )
         ).model_dump()
 
@@ -510,6 +529,9 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
         workspace: WorkspaceArg = "current",
         mode: SearchModeArg = "research",
         limit: int | None = None,
+        bundle_id: OptionalSearchFilterArg = None,
+        source_id: OptionalSearchFilterArg = None,
+        source_type: OptionalSearchFilterArg = None,
     ) -> dict[str, Any]:
         return search_index_for_workspace(
             WorkspaceSearchRequest(
@@ -517,6 +539,9 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
                 workspace=workspace,
                 mode=mode,
                 limit=limit,
+                bundle_id=bundle_id,
+                source_id=source_id,
+                source_type=source_type,
             )
         ).model_dump()
 
@@ -547,7 +572,7 @@ def build_server(cipher_service: CipherService | None = None) -> FastMCP:
     @mcp.tool(
         name="synapse_validate",
         description=(
-            "Report broken markdown wikilinks from an indexed Synapse database. "
+            "Report broken markdown wikilinks and vector linkage integrity from an indexed Synapse database. "
             "db_path must be a plain string path, not a nested object or collapsed multi-field string."
         ),
     )

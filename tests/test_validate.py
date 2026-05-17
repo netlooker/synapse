@@ -3,7 +3,7 @@
 import pytest
 
 from synapse.db import Database
-from synapse.validate import find_broken_links
+from synapse.validate import find_broken_links, inspect_vector_integrity
 
 
 class TestLinkValidation:
@@ -63,3 +63,13 @@ class TestLinkValidation:
         broken = find_broken_links(mock_db)
         targets = [item.target_link for item in broken]
         assert "DocB" not in targets
+
+    def test_vector_integrity_uses_rowid_linkage(self, mock_db):
+        integrity = inspect_vector_integrity(mock_db)
+
+        assert integrity.segment_count == 2
+        assert integrity.vector_count == 2
+        assert integrity.orphan_vector_count == 0
+        assert integrity.missing_vector_count == 0
+        assert integrity.status == "ok"
+        assert "vec_segments_rowids.rowid" in integrity.linkage_key

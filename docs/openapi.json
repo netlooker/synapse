@@ -1683,6 +1683,16 @@
           "database_path": {
             "title": "Database Path",
             "type": "string"
+          },
+          "vector_integrity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VectorIntegrityResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1730,6 +1740,54 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VectorIntegrityResult": {
+        "properties": {
+          "linkage_key": {
+            "title": "Linkage Key",
+            "type": "string"
+          },
+          "missing_vector_count": {
+            "title": "Missing Vector Count",
+            "type": "integer"
+          },
+          "orphan_vector_count": {
+            "title": "Orphan Vector Count",
+            "type": "integer"
+          },
+          "segment_count": {
+            "title": "Segment Count",
+            "type": "integer"
+          },
+          "shadow_rowids_id_null_count": {
+            "title": "Shadow Rowids Id Null Count",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warning",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "vector_count": {
+            "title": "Vector Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "segment_count",
+          "vector_count",
+          "orphan_vector_count",
+          "missing_vector_count",
+          "shadow_rowids_id_null_count",
+          "linkage_key",
+          "status"
+        ],
+        "title": "VectorIntegrityResult",
+        "type": "object"
       }
     }
   },
@@ -1737,7 +1795,7 @@
     "description": "Expose Synapse indexing, search, discovery, validation, and Cipher operations over JSON/HTTP for PWAs and other web clients.",
     "summary": "HTTP and OpenAPI interface for Synapse retrieval and Cipher reasoning.",
     "title": "Synapse API",
-    "version": "0.3.3"
+    "version": "0.3.4"
   },
   "openapi": "3.1.0",
   "paths": {

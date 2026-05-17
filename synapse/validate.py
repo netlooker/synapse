@@ -13,6 +13,20 @@ class BrokenLink:
     source_path: str
     target_link: str
 
+
+@dataclass
+class VectorIntegrity:
+    """Vector-to-segment linkage diagnostics for sqlite-vec storage."""
+
+    segment_count: int
+    vector_count: int
+    orphan_vector_count: int
+    missing_vector_count: int
+    shadow_rowids_id_null_count: int
+    linkage_key: str
+    status: str
+
+
 def find_broken_links(db: VectorStore) -> list[BrokenLink]:
     """Scan indexed notes for broken wikilinks."""
     valid_targets: Set[str] = set()
@@ -42,6 +56,102 @@ def find_broken_links(db: VectorStore) -> list[BrokenLink]:
                 broken_links.append(BrokenLink(path, link))
 
     return broken_links
+
+
+def inspect_vector_integrity(db: VectorStore) -> VectorIntegrity:
+    """Report whether sqlite-vec rows still line up with Synapse segments."""
+    segment_count = _count(db, "SELECT COUNT(*) FROM segments")
+    rowids_available = _table_exists(db, "vec_segments_rowids")
+    id_column_available = _column_exists(db, "vec_segments_rowids", "id")
+
+    if rowids_available:
+        vector_count = _count(db, "SELECT COUNT(*) FROM vec_segments_rowids")
+        orphan_vector_count = _count(
+            db,
+            """
+            SELECT COUNT(*)
+            FROM vec_segments_rowids vr
+            LEFT JOIN segments s ON s.id = vr.rowid
+            WHERE s.id IS NULL
+            """,
+        )
+        missing_vector_count = _count(
+            db,
+            """
+            SELECT COUNT(*)
+            FROM segments s
+            LEFT JOIN vec_segments_rowids vr ON vr.rowid = s.id
+            WHERE vr.rowid IS NULL
+            """,
+        )
+        shadow_rowids_id_null_count = (
+            _count(db, "SELECT COUNT(*) FROM vec_segments_rowids WHERE id IS NULL")
+            if id_column_available
+            else 0
+        )
+    else:
+        vector_count = _count(db, "SELECT COUNT(*) FROM vec_segments")
+        orphan_vector_count = _count(
+            db,
+            """
+            SELECT COUNT(*)
+            FROM vec_segments v
+            LEFT JOIN segments s ON s.id = v.segment_id
+            WHERE s.id IS NULL
+            """,
+        )
+        missing_vector_count = _count(
+            db,
+            """
+            SELECT COUNT(*)
+            FROM segments s
+            LEFT JOIN vec_segments v ON v.segment_id = s.id
+            WHERE v.segment_id IS NULL
+            """,
+        )
+        shadow_rowids_id_null_count = 0
+
+    status = "ok"
+    if orphan_vector_count > 0:
+        status = "error"
+    elif missing_vector_count > 0:
+        status = "warning"
+
+    return VectorIntegrity(
+        segment_count=segment_count,
+        vector_count=vector_count,
+        orphan_vector_count=orphan_vector_count,
+        missing_vector_count=missing_vector_count,
+        shadow_rowids_id_null_count=shadow_rowids_id_null_count,
+        linkage_key="segments.id -> vec_segments.segment_id / vec_segments_rowids.rowid",
+        status=status,
+    )
+
+
+def _count(db: VectorStore, query: str) -> int:
+    row = db.conn.execute(query).fetchone()
+    return int(row[0] if row else 0)
+
+
+def _table_exists(db: VectorStore, table_name: str) -> bool:
+    row = db.conn.execute(
+        """
+        SELECT 1
+        FROM sqlite_master
+        WHERE name = ?
+        LIMIT 1
+        """,
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _column_exists(db: VectorStore, table_name: str, column_name: str) -> bool:
+    return any(
+        row["name"] == column_name
+        for row in db.conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    )
+
 
 def _get_note_content(db: VectorStore, note_path: str) -> str:
     """Get note body content from the source-first notes table."""
@@ -88,10 +198,23 @@ def main():
     db.initialize()
     
     broken_links = find_broken_links(db)
+    vector_integrity = inspect_vector_integrity(db)
+
+    print("\nVector integrity:")
+    print(f"   Status: {vector_integrity.status}")
+    print(f"   Segments: {vector_integrity.segment_count}")
+    print(f"   Vectors: {vector_integrity.vector_count}")
+    print(f"   Orphan vectors: {vector_integrity.orphan_vector_count}")
+    print(f"   Missing vectors: {vector_integrity.missing_vector_count}")
+    print(
+        "   sqlite-vec shadow rowids.id NULLs: "
+        f"{vector_integrity.shadow_rowids_id_null_count} (informational)"
+    )
+    print(f"   Linkage key: {vector_integrity.linkage_key}")
     
     if not broken_links:
         print("\n✅ No broken links found! Graph is healthy.")
-        return 0
+        return 0 if vector_integrity.status != "error" else 1
         
     print(f"\n❌ Found {len(broken_links)} broken links:\n")
     
